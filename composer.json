@@ -1,23 +1,110 @@
 {
     "name": "rcv/core",
-    "description": "Core module for the application",
-    "type": "laravel-module",
+    "description": "Enterprise-Grade Modular Architecture for Laravel Applications - A powerful Laravel package that revolutionizes application development with robust Service Repository Pattern, Dynamic Module Management, and 50+ Artisan commands for scalable, maintainable applications.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "modular",
+        "architecture",
+        "service-repository",
+        "enterprise",
+        "modules",
+        "scalable",
+        "framework",
+        "package",
+        "development",
+        "artisan",
+        "commands",
+        "dynamic-loading",
+        "microservices"
+    ],
+    "homepage": "https://const-ant-laravel-corex-docs.vercel.app/",
+    "support": {
+        "issues": "https://github.com/RCV-Technologies/laravel-module/issues",
+        "source": "https://github.com/RCV-Technologies/laravel-module",
+        "docs": "https://const-ant-laravel-corex-docs.vercel.app/",
+        "email": "support@rcvtechnologies.com"
+    },
+    "authors": [
+        {
+            "name": "RCV Technologies",
+            "email": "support@rcvtechnologies.com",
+            "homepage": "https://rcvtechnologies.com",
+            "role": "Developer"
+        }
+    ],
     "require": {
-        "php": "^8"
+        "php": "^8.0",
+        "illuminate/support": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/console": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/database": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/filesystem": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/contracts": "^9.0|^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0|^10.0|^11.0",
+        "orchestra/testbench": "^7.0|^8.0|^9.0",
+        "mockery/mockery": "^1.4",
+        "phpstan/phpstan": "^1.0",
+        "friendsofphp/php-cs-fixer": "^3.0"
     },
     "autoload": {
         "psr-4": {
-            "Rcv\\Core\\": "src/"
+            "RCV\\Core\\": "src/"
         },
         "files": [
             "src/helpers.php"
         ]
     },
+    "autoload-dev": {
+        "psr-4": {
+            "RCV\\Core\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-coverage": "vendor/bin/phpunit --coverage-html coverage",
+        "format": "vendor/bin/php-cs-fixer fix",
+        "analyse": "vendor/bin/phpstan analyse",
+        "ci": [
+            "@format",
+            "@analyse",
+            "@test"
+        ]
+    },
     "extra": {
         "laravel": {
             "providers": [
-                "Rcv\\Core\\Providers\\CoreServiceProvider"
-            ]
+                "RCV\\Core\\Providers\\CoreServiceProvider"
+            ],
+            "aliases": {
+                "Module": "RCV\\Core\\Facades\\Module",
+                "ModuleMetrics": "RCV\\Core\\Facades\\ModuleMetrics"
+            }
+        },
+        "branch-alias": {
+            "dev-main": "1.x-dev"
         }
-    }
-} 
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "funding": [
+        {
+            "type": "github",
+            "url": "https://github.com/sponsors/rcv-technologies"
+        },
+        {
+            "type": "other",
+            "url": "https://rcvtechnologies.com/donate"
+        }
+    ]
+}
