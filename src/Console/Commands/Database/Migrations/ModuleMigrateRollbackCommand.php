@@ -122,3 +122,4 @@ class ModuleMigrateRollbackCommand extends Command
         }
     }
 }
+
