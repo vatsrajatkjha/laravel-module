@@ -168,8 +168,6 @@ class ModuleMakeCommand extends Command
 
     protected function registerModuleInComposer()
     {
-        // $composerFile = base_path('composer.json');
-        // $composer = json_decode(File::get($composerFile), true);
 
         $composerFile = base_path('composer.json');
 
