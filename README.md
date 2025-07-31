@@ -1184,7 +1184,7 @@ php artisan module:make YourAwesomeModule
 *Empowering developers to build better Laravel applications*
 
 </div>
-=======
+
 # RCV Core
 
 

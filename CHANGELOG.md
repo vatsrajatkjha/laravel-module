@@ -1,29 +1,34 @@
 # Changelog
 
-All notable changes to this package will be documented in this file.
+All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog][keepalog],
-and this project adheres to [Semantic Versioning][semver].
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),  
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
 
-## 1.0.16 (v10015) - Upcoming
+_(nothing yet)_
+
+## [1.0.1] - 2025-07-31
+
+### Fixed
+
+- Fixed case sensitivity issues in file paths and namespace resolution to ensure cross-platform compatibility on Linux and Windows.
+  - Replaced manual `mkdir()` with `File::ensureDirectoryExists()` to handle OS differences.
+  - Ensured consistent class name formatting using `Str::studly()`.
+  - Normalized paths for autoloading accuracy.
+
+## [1.0.0-alpha] - 2025-07-31
 
 ### Added
 
-- New feature X [PIX-12]
+- Initial Commit: Modular Package System by [@Vishal-kumar007](https://github.com/Vishal-kumar007) in [#1](https://github.com/RCV-Technologies/laravel-module/pull/1)
+- Updated README logo and removed commented/unnecessary code by [@vatsrajatkjha](https://github.com/vatsrajatkjha) in [#2](https://github.com/RCV-Technologies/laravel-module/pull/2)
 
-### Changed
+### Contributors
 
-- Thing A is no longer B, swapped with C instead for performance [PIX-345]
+- [@Vishal-kumar007](https://github.com/Vishal-kumar007) – First contribution
+- [@vatsrajatkjha](https://github.com/vatsrajatkjha) – First contribution
 
-### Fixed
+**Full Changelog:** [v1.0.0-alpha commits »](https://github.com/RCV-Technologies/laravel-module/commits/v1.0.0-alpha)
 
-- XYZ appeared when it shouldn't [PIX-100]
-- Fixed crash for users who ABC [PIX-101]
-
-
-## 1.0.0 (v10014) - 2020-10-31
-
-### Fixed
-
-- Added missing CHANGELOG.md
