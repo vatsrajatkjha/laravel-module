@@ -8,25 +8,18 @@ use Illuminate\Support\Str;
 
 class ModuleMakeCommand extends Command
 {
-    // signature for multiple names as arguments
     protected $signature = 'module:make {name*}';
-
-
     protected $description = 'Create one or more new modules';
 
     protected $moduleName;
-    protected $moduleNameLower;
     protected $moduleNameStudly;
-    protected $moduleNamePascal;
-    protected $moduleNameUpper;
+    protected $moduleNameLower;
+    protected $modulePath;
 
-    public function handle()
+    public function handle(): int
     {
-        $moduleNames = $this->argument('name');
-
-        foreach ($moduleNames as $name) {
-            $this->prepareModuleNameVariants($name);
-
+        foreach ($this->argument('name') as $name) {
+            $this->prepareModuleNames($name);
             $this->createModuleDirectories();
             $this->createModuleFiles();
             $this->registerModuleInComposer();
@@ -42,155 +35,103 @@ class ModuleMakeCommand extends Command
         return 0;
     }
 
-
-    protected function prepareModuleNameVariants($name)
+    protected function prepareModuleNames(string $name): void
     {
         $this->moduleName = $name;
-        $this->moduleNameStudly = Str::studly($this->moduleName);
-        $this->moduleNamePascal = $this->moduleNameStudly;
-        $this->moduleNameLower = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $this->moduleName));
-        $this->moduleNameUpper = strtoupper($this->moduleNameLower);
+        $this->moduleNameStudly = Str::studly($name);
+        $this->moduleNameLower = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $name));
+        $this->modulePath = base_path("modules/{$this->moduleNameStudly}");
     }
 
-    protected function createModuleDirectories()
+    protected function createModuleDirectories(): void
     {
-        $basePath = "modules/{$this->moduleNameStudly}";
-
         $directories = [
-            "$basePath",
-            "$basePath/src",
-            "$basePath/src/Config",
-            "$basePath/src/Console",
-            "$basePath/src/Database",
-            "$basePath/src/Database/Migrations",
-            "$basePath/src/Database/Seeders",
-            "$basePath/src/Database/Factories",
-            "$basePath/src/Http",
-            "$basePath/src/Http/Controllers",
-            "$basePath/src/Http/Controllers/Api",
-            "$basePath/src/Http/Middleware",
-            "$basePath/src/Http/Requests",
-            "$basePath/src/Models",
-            "$basePath/src/Providers",
-            "$basePath/src/Repositories",
-            "$basePath/src/Services",
-            "$basePath/src/Resources",
-            "$basePath/src/Resources/views",
-            "$basePath/src/Resources/assets",
-            "$basePath/src/Resources/assets/css",
-            "$basePath/src/Resources/assets/js",
-            "$basePath/src/Resources/assets/images",
-            "$basePath/src/Resources/lang",
-            "$basePath/src/Routes",
+            '',
+            'src/Config',
+            'src/Console',
+            'src/Database/Migrations',
+            'src/Database/Seeders',
+            'src/Database/Factories',
+            'src/Http/Controllers',
+            'src/Http/Controllers/Api',
+            'src/Http/Middleware',
+            'src/Http/Requests',
+            'src/Models',
+            'src/Providers',
+            'src/Repositories',
+            'src/Services',
+            'src/Resources/views',
+            'src/Resources/assets/css',
+            'src/Resources/assets/js',
+            'src/Resources/assets/images',
+            'src/Resources/lang',
+            'src/Routes',
         ];
 
-        foreach ($directories as $directory) {
-            if (!File::exists(base_path($directory))) {
-                File::makeDirectory(base_path($directory), 0755, true);
-            }
+        foreach ($directories as $dir) {
+            $fullPath = $this->modulePath . ($dir ? "/$dir" : '');
+            File::ensureDirectoryExists($fullPath, 0755, true);
         }
     }
 
-    protected function createModuleFiles()
+    protected function createModuleFiles(): void
     {
-        // $moduleBase = "modules/{$this->moduleNameLower}/src";
-
-        $moduleBase = "modules/{$this->moduleNameStudly}/src";
+        $stubBase = __DIR__ . '/../stubs';
+        $targetBase = $this->modulePath;
+        $srcBase = "$targetBase/src";
 
         $files = [
-            [
-                'stub' => 'composer.stub',
-                'target' => "modules/{$this->moduleNameLower}/composer.json"
-            ],
-            [
-                'stub' => 'provider.stub',
-                'target' => "$moduleBase/Providers/{$this->moduleNameStudly}ServiceProvider.php"
-            ],
-            [
-                'stub' => 'config.stub',
-                'target' => "$moduleBase/Config/config.php"
-            ],
-            [
-                'stub' => 'routes/web.stub',
-                'target' => "$moduleBase/Routes/web.php"
-            ],
-            [
-                'stub' => 'routes/api.stub',
-                'target' => "$moduleBase/Routes/api.php"
-            ],
-            [
-                'stub' => 'model.stub',
-                'target' => "$moduleBase/Models/BaseModel.php",
-                'replace' => ['{{ class_name }}' => 'BaseModel']
-            ],
-            [
-                'stub' => 'repository.stub',
-                'target' => "$moduleBase/Repositories/BaseRepository.php",
-                'replace' => ['{{ class_name }}' => 'BaseRepository']
-            ],
-            [
-                'stub' => 'service.stub',
-                'target' => "$moduleBase/Services/BaseService.php",
-                'replace' => ['{{ class_name }}' => 'Base']
-            ],
-            [
-                'stub' => 'HomeController.stub',
-                'target' => "$moduleBase/Http/Controllers/HomeController.php"
-            ],
-            [
-                'stub' => 'ApiHomeController.stub',
-                'target' => "$moduleBase/Http/Controllers/Api/HomeController.php"
-            ],
-            [
-                'stub' => 'EventServiceProvider.stub',
-                'target' => "$moduleBase/Providers/{$this->moduleNameStudly}EventServiceProvider.php"
-            ],
-            [
-                'stub' => 'database-seeder.stub',
-                'target' => "$moduleBase/Database/Seeders/{$this->moduleNameStudly}DatabaseSeeder.php"
-            ],
+            ['stub' => 'composer.stub', 'target' => "$targetBase/composer.json"],
+            ['stub' => 'provider.stub', 'target' => "$srcBase/Providers/{$this->moduleNameStudly}ServiceProvider.php"],
+            ['stub' => 'config.stub', 'target' => "$srcBase/Config/config.php"],
+            ['stub' => 'routes/web.stub', 'target' => "$srcBase/Routes/web.php"],
+            ['stub' => 'routes/api.stub', 'target' => "$srcBase/Routes/api.php"],
+            ['stub' => 'model.stub', 'target' => "$srcBase/Models/BaseModel.php", 'replace' => ['{{ class_name }}' => 'BaseModel']],
+            ['stub' => 'repository.stub', 'target' => "$srcBase/Repositories/BaseRepository.php", 'replace' => ['{{ class_name }}' => 'BaseRepository']],
+            ['stub' => 'service.stub', 'target' => "$srcBase/Services/BaseService.php", 'replace' => ['{{ class_name }}' => 'Base']],
+            ['stub' => 'HomeController.stub', 'target' => "$srcBase/Http/Controllers/HomeController.php"],
+            ['stub' => 'ApiHomeController.stub', 'target' => "$srcBase/Http/Controllers/Api/HomeController.php"],
+            ['stub' => 'EventServiceProvider.stub', 'target' => "$srcBase/Providers/{$this->moduleNameStudly}EventServiceProvider.php"],
+            ['stub' => 'database-seeder.stub', 'target' => "$srcBase/Database/Seeders/{$this->moduleNameStudly}DatabaseSeeder.php"],
         ];
 
         foreach ($files as $file) {
-            $stubContent = File::get($this->getStubPath($file['stub']));
-            $stubContent = str_replace('{{ module_name }}', $this->moduleNameStudly, $stubContent);
-            $stubContent = str_replace('{{ module_name_lower }}', $this->moduleNameLower, $stubContent);
+            $content = File::get("$stubBase/{$file['stub']}");
+            $content = str_replace(['{{ module_name }}', '{{ module_name_lower }}'], [$this->moduleNameStudly, $this->moduleNameLower], $content);
 
             if (isset($file['replace'])) {
-                foreach ($file['replace'] as $key => $value) {
-                    $stubContent = str_replace($key, $value, $stubContent);
+                foreach ($file['replace'] as $search => $replace) {
+                    $content = str_replace($search, $replace, $content);
                 }
             }
 
-            File::put(base_path($file['target']), $stubContent);
+            File::put($file['target'], $content);
         }
     }
 
-    protected function registerModuleInComposer()
+    protected function registerModuleInComposer(): void
     {
+        $composerPath = base_path('composer.json');
 
-        $composerFile = base_path('composer.json');
-
-        if (!File::exists($composerFile)) {
+        if (!File::exists($composerPath)) {
             $this->error("composer.json not found!");
             return;
         }
 
-        $composer = json_decode(File::get($composerFile), true);
+        $composer = json_decode(File::get($composerPath), true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             $this->error("Invalid JSON in composer.json");
             return;
         }
 
-        $composer['autoload']['psr-4']["Modules\\{$this->moduleNameStudly}\\"] = "modules/{$this->moduleNameLower}/src/";
-     
-        File::put($composerFile, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $composer['autoload']['psr-4']["Modules\\{$this->moduleNameStudly}\\"] = "modules/{$this->moduleNameStudly}/src/";
+        File::put($composerPath, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
-    protected function createModuleState()
+    protected function createModuleState(): void
     {
-        $moduleState = [
+        $state = [
             'name' => $this->moduleNameStudly,
             'version' => '1.0.0',
             'enabled' => false,
@@ -203,32 +144,25 @@ class ModuleMakeCommand extends Command
             'config' => []
         ];
 
-        File::put(
-            base_path("modules/{$this->moduleNameLower}/module.json"),
-            json_encode($moduleState, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-        );
+        File::put("{$this->modulePath}/module.json", json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
-    protected function registerModuleInCoreConfig()
+    protected function registerModuleInCoreConfig(): void
     {
-        $configFile = base_path('vendor/rcv/core/src/Config/config.php');
+        $configPath = base_path('vendor/rcv/core/src/Config/config.php');
 
-        $config = require $configFile;
-
-        if (!isset($config['modules'])) {
-            $config['modules'] = [];
+        if (!File::exists($configPath)) {
+            $this->error("Core config file not found: $configPath");
+            return;
         }
+
+        $config = require $configPath;
+        $config['modules'] = $config['modules'] ?? [];
 
         if (!in_array($this->moduleNameStudly, $config['modules'])) {
             $config['modules'][] = $this->moduleNameStudly;
         }
 
-        $content = "<?php\n\nreturn " . var_export($config, true) . ";\n";
-        File::put($configFile, $content);
-    }
-
-    protected function getStubPath($path = '')
-    {
-        return __DIR__ . '/../stubs' . ($path ? "/$path" : '');
+        File::put($configPath, "<?php\n\nreturn " . var_export($config, true) . ";\n");
     }
 }
