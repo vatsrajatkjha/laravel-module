@@ -86,5 +86,11 @@ return array (
     17 => 'Demo3',
     18 => 'Demo4',
     19 => 'Colleger',
+    20 => 'UserManagement',
+    21 => 'Employee',
+    22 => 'Staff',
+    23 => 'Candidate',
+    24 => 'Help',
+    25 => 'CollegeManagement',
   ),
 );

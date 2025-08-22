@@ -190,7 +190,14 @@ class CoreServiceProvider extends ServiceProvider
 
         $this->commands($this->commands);
 
-        $this->registerModuleProviders();
+        // Use application-level singleton to prevent multiple registrations
+        $this->app->singleton('rcv.modules.registered', function () {
+            $this->registerModuleProviders();
+            return true;
+        });
+
+        // Force resolution to ensure registration happens only once
+        $this->app->make('rcv.modules.registered');
     }
 
     /**
@@ -204,7 +211,15 @@ class CoreServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->registerTranslations();
         $this->registerMigrations();
-        $this->bootModules();
+        
+        // Use application-level singleton to prevent multiple boots
+        $this->app->singleton('rcv.modules.booted', function () {
+            $this->bootModules();
+            return true;
+        });
+
+        // Force resolution to ensure booting happens only once
+        $this->app->make('rcv.modules.booted');
     }
 
     /**
@@ -247,6 +262,54 @@ class CoreServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands($this->commands);
+
+            // Register seeder listener only once using singleton
+            $this->app->singleton('rcv.seeder.listener.registered', function () {
+                \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\CommandFinished::class, function ($event) {
+                    static $rcvSeedingModules = false;
+                    if ($rcvSeedingModules) {
+                        return;
+                    }
+
+                    if ($event->command === 'db:seed') {
+                        // Only run when no specific class is provided
+                        $input = $event->input ?? null;
+                        if ($input && $input->getOption('class')) {
+                            return;
+                        }
+
+                        $modulesPath = base_path('Modules');
+                        if (!\Illuminate\Support\Facades\File::exists($modulesPath)) {
+                            return;
+                        }
+
+                        $rcvSeedingModules = true;
+                        try {
+                            foreach (\Illuminate\Support\Facades\File::directories($modulesPath) as $moduleDir) {
+                                $moduleName = basename($moduleDir);
+                                $seederClass = "Modules\\\\{$moduleName}\\\\Database\\\\Seeders\\\\{$moduleName}DatabaseSeeder";
+                                if (class_exists($seederClass)) {
+                                    try {
+                                        \Illuminate\Support\Facades\Artisan::call('db:seed', [
+                                            '--class' => $seederClass,
+                                            '--force' => true,
+                                        ]);
+                                        $this->app['log']->info("Seeded module: {$moduleName}");
+                                    } catch (\Throwable $t) {
+                                        $this->app['log']->error("Failed seeding module {$moduleName}: " . $t->getMessage());
+                                    }
+                                }
+                            }
+                        } finally {
+                            $rcvSeedingModules = false;
+                        }
+                    }
+                });
+                return true;
+            });
+
+            // Force resolution
+            $this->app->make('rcv.seeder.listener.registered');
         }
     }
 
@@ -269,7 +332,7 @@ class CoreServiceProvider extends ServiceProvider
      */
     protected function registerViews(): void
     {
-        $viewPath = base_path('modules/Core/src/Resources/views');
+        $viewPath = base_path('Modules/Core/src/Resources/views');
         
         if (File::exists($viewPath)) {
             $this->loadViewsFrom($viewPath, 'core');
@@ -306,21 +369,28 @@ class CoreServiceProvider extends ServiceProvider
     protected function registerModuleProviders(): void
     {
         try {
+            // Check if we already have registered providers in this application instance
+            if ($this->app->bound('rcv.registered.providers')) {
+                return; // Already registered
+            }
+
             $moduleManager = $this->app->make(ModuleManager::class);
             $modules = $moduleManager->getEnabledModules();
             
-            \Illuminate\Support\Facades\Log::info('Enabled modules:', $modules);
+            $registeredProviders = [];
             
             foreach ($modules as $module) {
                 $studlyModule = Str::studly($module);
                 $providerClass = "Modules\\{$studlyModule}\\Providers\\{$studlyModule}ServiceProvider";
-                \Illuminate\Support\Facades\Log::info("Attempting to register provider: {$providerClass}");
                 
                 if (class_exists($providerClass)) {
                     try {
-                        $provider = $this->app->resolveProvider($providerClass);
-                        $this->app->register($provider);
-                        \Illuminate\Support\Facades\Log::info("Successfully registered provider: {$providerClass}");
+                        // Check if provider is already registered in Laravel's container
+                        if (!in_array($providerClass, $this->app->getLoadedProviders())) {
+                            $provider = $this->app->resolveProvider($providerClass);
+                            $this->app->register($provider);
+                            $registeredProviders[] = $providerClass;
+                        }
                     } catch (\Exception $e) {
                         \Illuminate\Support\Facades\Log::error("Failed to register provider {$providerClass}: " . $e->getMessage());
                         throw $e;
@@ -329,6 +399,17 @@ class CoreServiceProvider extends ServiceProvider
                     \Illuminate\Support\Facades\Log::warning("Provider class not found: {$providerClass}");
                 }
             }
+
+            // Store the registered providers list as a singleton
+            $this->app->singleton('rcv.registered.providers', function () use ($registeredProviders) {
+                return $registeredProviders;
+            });
+
+            // Only log if there were actual registrations
+            if (!empty($registeredProviders) && config('app.debug', false)) {
+                \Illuminate\Support\Facades\Log::debug('Module providers registered', $registeredProviders);
+            }
+
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Error in registerModuleProviders: " . $e->getMessage());
             throw $e;
@@ -341,28 +422,45 @@ class CoreServiceProvider extends ServiceProvider
     protected function bootModules(): void
     {
         try {
-            $moduleManager = $this->app->make(ModuleManager::class);
-            $modules = $moduleManager->getEnabledModules();
-            
-            foreach ($modules as $module) {
-                $studlyModule = Str::studly($module);
-                $providerClass = "Modules\\{$studlyModule}\\Providers\\{$studlyModule}ServiceProvider";
-                if (class_exists($providerClass)) {
-                    try {
-                        $provider = $this->app->resolveProvider($providerClass);
-                        if (method_exists($provider, 'boot')) {
-                            // Call boot only if it exists and is callable
-                            call_user_func([$provider, 'boot']);
-                        }
-                    } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error("Failed to boot provider {$providerClass}: " . $e->getMessage());
-                        throw $e;
+            // Check if we already have booted modules in this application instance
+            if ($this->app->bound('rcv.booted.modules')) {
+                return; // Already booted
+            }
+
+            // Get the registered providers
+            if (!$this->app->bound('rcv.registered.providers')) {
+                return; // No providers registered yet
+            }
+
+            $registeredProviders = $this->app->make('rcv.registered.providers');
+            $bootedModules = [];
+
+            foreach ($registeredProviders as $providerClass) {
+                try {
+                    $provider = $this->app->resolveProvider($providerClass);
+                    if (method_exists($provider, 'boot')) {
+                        call_user_func([$provider, 'boot']);
+                        $bootedModules[] = $providerClass;
                     }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Failed to boot provider {$providerClass}: " . $e->getMessage());
+                    throw $e;
                 }
             }
+
+            // Mark as booted
+            $this->app->singleton('rcv.booted.modules', function () use ($bootedModules) {
+                return $bootedModules;
+            });
+
+            // Only log if there were actual boots
+            if (!empty($bootedModules) && config('app.debug', false)) {
+                \Illuminate\Support\Facades\Log::debug('Module providers booted', $bootedModules);
+            }
+
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Error in bootModules: " . $e->getMessage());
             throw $e;
         }
     }
-} 
+}

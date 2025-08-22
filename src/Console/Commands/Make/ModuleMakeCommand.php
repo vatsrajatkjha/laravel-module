@@ -40,7 +40,7 @@ class ModuleMakeCommand extends Command
         $this->moduleName = $name;
         $this->moduleNameStudly = Str::studly($name);
         $this->moduleNameLower = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $name));
-        $this->modulePath = base_path("modules/{$this->moduleNameStudly}");
+        $this->modulePath = base_path("Modules/{$this->moduleNameStudly}");
     }
 
     protected function createModuleDirectories(): void
@@ -87,7 +87,13 @@ class ModuleMakeCommand extends Command
             ['stub' => 'routes/web.stub', 'target' => "$srcBase/Routes/web.php"],
             ['stub' => 'routes/api.stub', 'target' => "$srcBase/Routes/api.php"],
             ['stub' => 'model.stub', 'target' => "$srcBase/Models/BaseModel.php", 'replace' => ['{{ class_name }}' => 'BaseModel']],
-            ['stub' => 'repository.stub', 'target' => "$srcBase/Repositories/BaseRepository.php", 'replace' => ['{{ class_name }}' => 'BaseRepository']],
+            ['stub' => 'repository.stub',
+                'target' => "$srcBase/Repositories/BaseRepository.php",
+                'replace' => [
+                    '{{ class_name }}' => 'BaseRepository',
+                    '{{ namespace }}' => "Modules\\{$this->moduleNameStudly}\\Repositories"
+                ]
+            ],
             ['stub' => 'service.stub', 'target' => "$srcBase/Services/BaseService.php", 'replace' => ['{{ class_name }}' => 'Base']],
             ['stub' => 'HomeController.stub', 'target' => "$srcBase/Http/Controllers/HomeController.php"],
             ['stub' => 'ApiHomeController.stub', 'target' => "$srcBase/Http/Controllers/Api/HomeController.php"],
@@ -125,7 +131,7 @@ class ModuleMakeCommand extends Command
             return;
         }
 
-        $composer['autoload']['psr-4']["Modules\\{$this->moduleNameStudly}\\"] = "modules/{$this->moduleNameStudly}/src/";
+        $composer['autoload']['psr-4']["Modules\\{$this->moduleNameStudly}\\"] = "Modules/{$this->moduleNameStudly}/src/";
         File::put($composerPath, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
