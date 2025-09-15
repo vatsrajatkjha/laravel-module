@@ -1,13 +1,13 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
-use Rcv\Core\Models\ModuleState;
-use Rcv\Core\Services\MarketplaceService;
+use RCV\Core\Models\ModuleState;
+use RCV\Core\Services\MarketplaceService;
 
 class ModuleHealthCheck
 {
@@ -276,8 +276,8 @@ class ModuleHealthCheck
                 $composer = json_decode(File::get($composerFile), true);
                 if (isset($composer['require'])) {
                     foreach ($composer['require'] as $package => $version) {
-                        if (strpos($package, 'modules/') === 0) {
-                            $depModuleName = str_replace('modules/', '', $package);
+                        if (strpos($package, 'Modules/') === 0) {
+                            $depModuleName = str_replace('Modules/', '', $package);
                             if (!$this->marketplaceService->isModuleEnabled($depModuleName)) {
                                 $result['status'] = 'error';
                                 $result['message'] = 'Missing required module dependencies';

@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
-use Rcv\Core\Services\ModuleMiddlewareManager;
+use RCV\Core\Services\ModuleMiddlewareManager;
 
 use Illuminate\Support\Facades\File;
 
@@ -21,7 +21,7 @@ class ModuleMiddlewareCommand extends Command
         $module = $this->argument('module');
 
         // Correct path to the middleware folder inside module
-        $middlewarePath = base_path("modules/{$module}/src/Http/Middleware");
+        $middlewarePath = base_path("Modules/{$module}/src/Http/Middleware");
         $filePath = "{$middlewarePath}/{$name}.php";
 
         if (!is_dir($middlewarePath)) {

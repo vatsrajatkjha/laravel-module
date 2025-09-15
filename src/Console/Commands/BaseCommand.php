@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 
 use Closure;
 use Illuminate\Console\Command;
@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Console\Prohibitable;
 use Illuminate\Console\ConfirmableTrait;
 use function Laravel\Prompts\multisearch;
-use Rcv\Core\Contracts\VerifiableCommand;
+use RCV\Core\Contracts\VerifiableCommand;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;

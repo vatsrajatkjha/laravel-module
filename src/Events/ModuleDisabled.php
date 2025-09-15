@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Events;
+namespace RCV\Core\Events;
 
 class ModuleDisabled
 {

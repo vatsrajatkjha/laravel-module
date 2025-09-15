@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Publish;
+namespace RCV\Core\Console\Commands\Publish;
 
 
 use Illuminate\Console\Command;
@@ -46,7 +46,7 @@ class ModulePublishAssetsCommand extends Command
         $this->info("Publishing assets for module: {$moduleName}");
 
         $sourcePath = base_path("Modules/{$moduleName}/Resources/assets");
-        $destinationPath = public_path("modules/" . strtolower($moduleName));
+        $destinationPath = public_path("Modules/" . strtolower($moduleName));
 
         if ($debug) {
             $this->showDebugInfo($moduleName, $sourcePath, $destinationPath);

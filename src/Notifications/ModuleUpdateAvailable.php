@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Notifications;
+namespace RCV\Core\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
@@ -32,7 +32,7 @@ class ModuleUpdateAvailable extends Notification
             $message->line("- {$update['name']} (Current: {$update['current_version']}, Available: {$update['version']})");
         }
 
-        $message->action('View Updates', url('/admin/modules/marketplace'))
+        $message->action('View Updates', url('/admin/Modules/marketplace'))
             ->line('Please review and apply these updates at your earliest convenience.');
 
         return $message;

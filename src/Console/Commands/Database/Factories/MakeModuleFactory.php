@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Database\Factories;
+namespace RCV\Core\Console\Commands\Database\Factories;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
@@ -27,7 +27,7 @@ class MakeModuleFactory extends Command
         $name = $this->argument('name');
 
         // Updated path to match your structure
-        $factoryPath = base_path("modules/{$module}/src/Database/Factories");
+        $factoryPath = base_path("Modules/{$module}/src/Database/Factories");
 
         if (! $this->files->isDirectory($factoryPath)) {
             $this->files->makeDirectory($factoryPath, 0755, true);

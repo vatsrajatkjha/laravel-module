@@ -1,19 +1,22 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Str;
 
 class MakeCastCommand extends Command
 {
     protected $signature = 'module:make-cast 
-                            {module : The name of the module} 
-                            {name : The name of the cast class}';
+                            {name : The name of the cast class (with optional subdirectory, e.g. Custom/FormatDate)} 
+                            {module : The name of the module}';
 
     protected $description = 'Create a new Eloquent cast class for the specified module';
 
     protected Filesystem $files;
+    protected string $namespace;
+    protected string $className;
 
     public function __construct()
     {
@@ -21,45 +24,60 @@ class MakeCastCommand extends Command
         $this->files = new Filesystem();
     }
 
-    public function handle()
+    public function handle(): int
     {
-        $module = $this->argument('module'); // e.g. Student
-        $name = $this->argument('name');     // e.g. FormatDate
-        $className = ucfirst($name);
+        $module = Str::studly($this->argument('module')); // e.g. Blog
+        $nameInput = str_replace('\\', '/', $this->argument('name')); // normalize path
 
-        // Path where cast class will be created
-        $castDir = base_path("Modules/{$module}/src/database/casts");
+        // Extract class name + subdirectory
+        $this->className = Str::studly(class_basename($nameInput));
+        $subPath = trim(dirname($nameInput), '.');
 
-        if (! $this->files->isDirectory($castDir)) {
-            $this->files->makeDirectory($castDir, 0755, true);
+        // Namespace always under Casts
+        $this->namespace = "Modules\\{$module}\\Casts" . ($subPath ? '\\' . str_replace('/', '\\', $subPath) : '');
+
+        $destinationPath = $this->getDestinationFilePath($module, $nameInput);
+
+        // Prevent overwriting
+        if ($this->files->exists($destinationPath)) {
+            $this->error("Cast class '{$this->className}' already exists in module '{$module}' at [{$destinationPath}]!");
+            return static::FAILURE;
         }
 
-        $castFile = "{$castDir}/{$className}.php";
+        $this->files->ensureDirectoryExists(dirname($destinationPath));
+        $this->files->put($destinationPath, $this->getStubContents());
 
-        if ($this->files->exists($castFile)) {
-            $this->error("Cast class '{$className}' already exists in module '{$module}'!");
-            return 1;
-        }
+        // ✅ Show exact path after generation
+        $this->info("Cast class '{$this->className}' created successfully in module '{$module}' at [{$destinationPath}]");
 
-        // Stub path from Core module
-      
+        return static::SUCCESS;
+    }
+
+    protected function getStubContents(): string
+    {
         $stubPath = __DIR__ . '/../stubs/cast.stub';
 
         if (! $this->files->exists($stubPath)) {
             $this->error("Stub file not found at {$stubPath}");
-            return 1;
+            exit(1);
         }
 
         $stub = $this->files->get($stubPath);
 
-        // Replace placeholders
-      
-        $stub = str_replace('{{ module_name }}', $module, $stub);
-        $stub = str_replace('{{ class_name }}', $name, $stub);
+        return str_replace(
+            ['{{ namespace }}', '{{ class }}'],
+            [$this->namespace, $this->className],
+            $stub
+        );
+    }
 
-        $this->files->put($castFile, $stub);
+    protected function getDestinationFilePath(string $module, string $nameInput): string
+    {
+        $subPath = trim(dirname($nameInput), '.');
+        $className = Str::studly(class_basename($nameInput));
 
-        $this->info("Cast class '{$className}' created successfully in module '{$module}'.");
-        return 0;
+        $directory = base_path("Modules/{$module}/src/Casts" . ($subPath ? '/' . $subPath : ''));
+
+        return "{$directory}/{$className}.php";
     }
 }

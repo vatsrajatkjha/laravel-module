@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -8,8 +8,8 @@ use Illuminate\Support\Str;
 
 class MakeEnum extends Command
 {
-    protected $signature = 'module:make-enum {module} {name}';
-    protected $description = 'Create a new enum class for the specified module';
+    protected $signature = 'module:make-enum {name : The name of the enum (with optional subdirectory, e.g. Statuses/UserRole)} {module : The name of the module}';
+    protected $description = 'Create a new enum class inside the specified module';
 
     protected string $namespace;
     protected string $enumName;
@@ -19,9 +19,12 @@ class MakeEnum extends Command
         $module = Str::studly($this->argument('module'));
         $nameInput = str_replace('\\', '/', $this->argument('name'));
 
+        // Extract class name
         $this->enumName = Str::studly(class_basename($nameInput));
-        $subPath = dirname($nameInput) !== '.' ? dirname($nameInput) : '';
-        $this->namespace = "Modules\\{$module}\\src" . ($subPath ? '\\' . str_replace('/', '\\', $subPath) : '');
+
+        // Subdirectories under Enums
+        $subPath = trim(dirname($nameInput), '.');
+        $this->namespace = "Modules\\{$module}\\Enums" . ($subPath ? '\\' . str_replace('/', '\\', $subPath) : '');
 
         $destinationPath = $this->getDestinationFilePath();
         $contents = $this->getTemplateContents();
@@ -60,10 +63,13 @@ class MakeEnum extends Command
     {
         $module = Str::studly($this->argument('module'));
         $nameInput = str_replace('\\', '/', $this->argument('name'));
-        $enumName = Str::studly(class_basename($nameInput));
-        $subPath = dirname($nameInput) !== '.' ? dirname($nameInput) : '';
 
-        $directory = base_path("Modules/{$module}/src" . ($subPath ? '/' . $subPath : ''));
-        return "{$directory}/Enum/{$enumName}.php";
+        $enumName = Str::studly(class_basename($nameInput));
+        $subPath = trim(dirname($nameInput), '.');
+
+        // Always put enums inside `src/Enums/...`
+        $directory = base_path("Modules/{$module}/src/Enums" . ($subPath ? '/' . $subPath : ''));
+
+        return "{$directory}/{$enumName}.php";
     }
 }

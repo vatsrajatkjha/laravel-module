@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Actions;
+namespace RCV\Core\Console\Commands\Actions;
 
 use Illuminate\Console\Command;
-use Rcv\Core\Services\MarketplaceService;
+use RCV\Core\Services\MarketplaceService;
 
 class ModuleCheckUpdatesCommand extends Command
 {

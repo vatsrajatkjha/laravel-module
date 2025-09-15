@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Database\Migrations;
+namespace RCV\Core\Console\Commands\Database\Migrations;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
@@ -30,14 +30,14 @@ class ModuleMigrateRollbackCommand extends Command
     protected function rollbackModule(string $module)
     {
         // Check both possible path cases
-        $pathLower = base_path("modules/{$module}/src/database/migrations");
-        $pathUpper = base_path("modules/{$module}/src/Database/Migrations");
+        $pathLower = base_path("Modules/{$module}/src/database/migrations");
+        $pathUpper = base_path("Modules/{$module}/src/Database/Migrations");
         
         $migrationPath = null;
         if (File::exists($pathLower)) {
-            $migrationPath = "modules/{$module}/src/database/migrations";
+            $migrationPath = "Modules/{$module}/src/database/migrations";
         } elseif (File::exists($pathUpper)) {
-            $migrationPath = "modules/{$module}/src/Database/migrations";
+            $migrationPath = "Modules/{$module}/src/Database/migrations";
         }
 
         if (!$migrationPath) {

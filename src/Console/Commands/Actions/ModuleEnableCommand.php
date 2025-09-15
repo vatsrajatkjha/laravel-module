@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Actions;
+namespace RCV\Core\Console\Commands\Actions;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -10,7 +10,7 @@ class ModuleEnableCommand extends Command
 {
     // Accept multiple names (1 or more) 
     protected $signature = 'module:enable {module* : Module name(s) to enable}';
-    protected $description = 'Enable one or more modules from modules/ or vendor/rcv/';
+    protected $description = 'Enable one or more modules from Modules/ or vendor/rcv/';
 
     public function handle()
     {
@@ -21,7 +21,7 @@ class ModuleEnableCommand extends Command
             $this->info("Enabling module [{$name}]...");
 
             try {
-                $modulePath = base_path("modules/{$name}");
+                $modulePath = base_path("Modules/{$name}");
                 $isVendor = false;
 
                 if (!File::exists($modulePath)) {

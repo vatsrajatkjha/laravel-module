@@ -1,6 +1,6 @@
 <?php
 
-namespace  Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -8,79 +8,126 @@ use Illuminate\Support\Str;
 
 class MakeModuleComponent extends Command
 {
-    protected $signature = 'module:make-component {name} {module}';
-    protected $description = 'Create a new component class and blade view inside a module';
+    protected $signature = 'module:make-component 
+        {module : The module name} 
+        {names : One or multiple component class names (comma-separated, e.g. Organization/Sidebar,Dashboard/Header)} 
+        {--stub-class= : Path to custom component class stub} 
+        {--stub-view= : Path to custom blade view stub}';
 
-  public function handle()
+    protected $description = 'Create one or more component classes and blade views for a module and register them in the ServiceProvider';
+
+    public function handle(): int
     {
-        $componentInput = $this->argument('name'); // e.g., folder/componentname
-        $module = $this->argument('module'); // e.g., Blog
+        $module = $this->argument('module');
+        $names  = explode(',', $this->argument('names')); // multiple components supported
 
-        $componentPath = str_replace('\\', '/', $componentInput);
-        $pathParts = explode('/', $componentPath);
-        $className = array_pop($pathParts);
-        $folderPath = implode('/', $pathParts);
-
-        $moduleNamespace = 'Modules\\' . $module;
-        $basePath = base_path("Modules/{$module}");
-
-        // Check if module exists
-        if (!File::exists($basePath)) {
-            $this->error("Module [{$module}] not found at path: Modules/{$module}");
-            return Command::FAILURE;
+        foreach ($names as $name) {
+            $name = trim($name);
+            $this->generateComponent($module, $name);
         }
 
-        // Component class directory and file
-        $componentDir = $basePath . '/src/View/Components' . ($folderPath ? '/' . $folderPath : '');
-        $componentFile = $componentDir . '/' . $className . '.php';
-
-        // View file directory and file
-    // Correct view file directory inside src
-    $viewDir = $basePath . '/src/resources/views/components' . ($folderPath ? '/' . $folderPath : '');
-    $viewFile = $viewDir . '/' . \Illuminate\Support\Str::kebab($className) . '.blade.php';
-
-
-        // Ensure component directory exists
-        if (!File::exists($componentDir)) {
-            File::makeDirectory($componentDir, 0755, true);
-            $this->info("Created directory: {$componentDir}");
-        }
-
-        // Ensure view directory exists
-        if (!File::exists($viewDir)) {
-            File::makeDirectory($viewDir, 0755, true);
-            $this->info("Created directory: {$viewDir}");
-        }
-
-        // Component class content
-        $classNamespace = $moduleNamespace . '\\View\\Components' . ($folderPath ? '\\' . str_replace('/', '\\', $folderPath) : '');
-        $viewReference = strtolower($module) . '::components' . ($folderPath ? '.' . str_replace('/', '.', $folderPath) : '') . '.' . \Illuminate\Support\Str::kebab($className);
-
-        $stub = File::get(__DIR__ . '/../stubs/component.stub');
-            $classContent = str_replace(
-            ['{{ module_name }}', '{{ class_name }}', '{{ view }}'],
-                [$classNamespace, $className, $viewReference],
-                $stub
-            );
-
-        // Handle component class file
-        if (!File::exists($componentFile)) {
-            File::put($componentFile, $classContent);
-            $this->info("✅ Component class created at: {$componentFile}");
-        } else {
-            $this->warn("⚠️ Component class already exists at: {$componentFile}");
-        }
-
-        // Handle blade view file
-        if (!File::exists($viewFile)) {
-            File::put($viewFile, "<!-- Blade view for {$className} component -->");
-            $this->info("✅ Blade view created at: {$viewFile}");
-        } else {
-            $this->warn("⚠️ Blade view already exists at: {$viewFile}");
-        }
-
-        return Command::SUCCESS;
+        return static::SUCCESS;
     }
 
+    protected function generateComponent(string $module, string $name): void
+    {
+        [$classPath, $viewPath, $namespace, $className, $viewName] = $this->preparePaths($module, $name);
 
+        // Generate Component Class
+        if (!File::exists($classPath)) {
+            File::ensureDirectoryExists(dirname($classPath));
+            File::put($classPath, $this->getClassTemplate($namespace, $className, $viewName));
+            $this->info("✅ Component class created: {$classPath}");
+        } else {
+            $this->error("⚠️ Component class already exists: {$classPath}");
+        }
+
+        // Generate Component View
+        if (!File::exists($viewPath)) {
+            File::ensureDirectoryExists(dirname($viewPath));
+            File::put($viewPath, $this->getViewTemplate());
+            $this->info("✅ Component view created: {$viewPath}");
+        } else {
+            $this->error("⚠️ Component view already exists: {$viewPath}");
+        }
+
+        // Register in ServiceProvider
+        $this->registerInServiceProvider($module, $namespace . '\\' . $className, $viewName);
+    }
+
+    protected function preparePaths(string $module, string $name): array
+    {
+        // Example input: "Organization/Sidebar"
+        $parts = explode('/', $name);
+        $className = array_pop($parts); // Sidebar
+        $subNamespace = implode('\\', $parts); // Organization
+        $subPath = implode('/', $parts); // Organization
+
+        $namespace = "Modules\\{$module}\\View\\Components"
+            . ($subNamespace ? "\\{$subNamespace}" : '');
+
+        // Class file
+        $classPath = base_path("Modules/{$module}/src/View/Components"
+            . ($subPath ? "/{$subPath}" : '')
+            . "/{$className}.php");
+
+        // Blade file (kebab-case)
+        $viewRelative = strtolower(implode('/', array_filter([
+            $subPath,
+            Str::kebab($className)
+        ])));
+
+        $viewPath = base_path("Modules/{$module}/src/Resources/views/components/{$viewRelative}.blade.php");
+
+        $viewName = strtolower($module) . "::components." . str_replace('/', '.', $viewRelative);
+
+        return [$classPath, $viewPath, $namespace, $className, $viewName];
+    }
+
+    protected function getClassTemplate(string $namespace, string $className, string $viewName): string
+    {
+        $stubPath = $this->option('stub-class') ?? __DIR__ . '/../stubs/component.stub';
+        $stub     = File::get($stubPath);
+
+        return str_replace(
+            ['{{ namespace }}', '{{ class_name }}', '{{ view_path }}'],
+            [$namespace, $className, $viewName],
+            $stub
+        );
+    }
+
+    protected function getViewTemplate(): string
+    {
+        $stubPath = $this->option('stub-view') ?? __DIR__ . '/../stubs/component-view.stub';
+        return File::get($stubPath);
+    }
+
+    protected function registerInServiceProvider(string $module, string $classNamespace, string $viewName): void
+    {
+        $providerPath = base_path("Modules/{$module}/src/Providers/{$module}ServiceProvider.php");
+
+        if (!File::exists($providerPath)) {
+            $this->error("⚠️ ServiceProvider not found for module: {$module}");
+            return;
+        }
+
+        $contents = File::get($providerPath);
+
+        $registrationLine = "        \\Illuminate\\Support\\Facades\\Blade::component('{$viewName}', {$classNamespace}::class);";
+
+        if (strpos($contents, $registrationLine) !== false) {
+            $this->info("🔁 Component already registered in {$module}ServiceProvider");
+            return;
+        }
+
+        $contents = preg_replace(
+            '/(protected function registerComponents\(\): void\s*\{\s*)([\s\S]*?)(\})/',
+            "$1$2\n$registrationLine\n    $3",
+            $contents
+        );
+
+        File::put($providerPath, $contents);
+
+        $this->info("✅ Component registered in {$module}ServiceProvider");
+    }
 }

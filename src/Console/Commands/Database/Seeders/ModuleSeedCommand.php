@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Database\Seeders;
+namespace RCV\Core\Console\Commands\Database\Seeders;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
@@ -45,7 +45,7 @@ class ModuleSeedCommand extends Command
             // Check if migration path exists (try common variations)
             $possiblePaths = [
                 "Modules/{$module}/Database/Migrations",
-                "modules/{$module}/src/database/migrations",
+                "Modules/{$module}/src/database/migrations",
                 "Modules/{$module}/database/migrations"
             ];
             

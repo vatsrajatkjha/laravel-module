@@ -1,10 +1,10 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
-use Rcv\Core\Models\ModuleState;
+use RCV\Core\Models\ModuleState;
 
 class CacheManager
 {

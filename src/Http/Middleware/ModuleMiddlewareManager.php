@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Http\Middleware;
+namespace RCV\Core\Http\Middleware;
 
 use Illuminate\Routing\Router;
 use Illuminate\Support\Collection;

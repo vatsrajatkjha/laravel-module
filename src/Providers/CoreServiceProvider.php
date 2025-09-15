@@ -1,94 +1,104 @@
 <?php
 
-namespace Rcv\Core\Providers;
+namespace RCV\Core\Providers;
 
 use Illuminate\Support\Str;
-use Rcv\Core\Services\BaseService;
-use Rcv\Core\Services\ModuleLoader;
+use RCV\Core\Services\BaseService;
+use RCV\Core\Services\ModuleLoader;
 use Illuminate\Support\Facades\File;
-use Rcv\Core\Services\ModuleManager;
+use RCV\Core\Services\ModuleManager;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
-use Rcv\Core\Contracts\ServiceInterface;
-use Rcv\Core\Repositories\BaseRepository;
-use Rcv\Core\Repositories\MainRepository;
-use Rcv\Core\Services\MarketplaceService;
-use Rcv\Core\Contracts\RepositoryInterface;
-use Rcv\Core\Console\Commands\Make\MakeEnum;
-use Rcv\Core\Console\Commands\Make\MakeAction;
-use Rcv\Core\Console\Commands\Make\MakeChannel;
-use Rcv\Core\Services\ModuleRegistrationService;
-use Rcv\Core\Console\Commands\ModuleDebugCommand;
-use Rcv\Core\Console\Commands\ModuleSetupCommand;
-use Rcv\Core\Console\Commands\ModuleStateCommand;
-use Rcv\Core\Console\Commands\Make\MakeJobCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleRule;
-use Rcv\Core\Console\Commands\ModuleBackupCommand;
-use Rcv\Core\Console\Commands\ModuleClearCompiled;
-use Rcv\Core\Console\Commands\Make\MakeCastCommand;
-use Rcv\Core\Console\Commands\Make\MakeMailCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleClass;
-use Rcv\Core\Console\Commands\Make\MakeModuleTrait;
-use Rcv\Core\Console\Commands\MigrateV1ModulesToV2;
-use Rcv\Core\Console\Commands\Make\MakeModulePolicy;
-use Rcv\Core\Console\Commands\ModuleAutoloadCommand;
-use Rcv\Core\Console\Commands\UpdatePhpunitCoverage;
-use Rcv\Core\Console\Commands\DiscoverModulesCommand;
-use Rcv\Core\Console\Commands\Make\MakeComponentView;
-use Rcv\Core\Console\Commands\Make\MakeModuleRequest;
-use Rcv\Core\Console\Commands\Make\ModuleAllCommands;
-use Rcv\Core\Console\Commands\Make\ModuleMakeCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleObserver;
-use Rcv\Core\Console\Commands\Make\ModuleMakeListener;
-use Rcv\Core\Console\Commands\Actions\ModuleUseCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleComponent;
-use Rcv\Core\Console\Commands\ModuleHealthCheckCommand;
-use Rcv\Core\Console\Commands\Make\MakeInterfaceCommand;
-use Rcv\Core\Console\Commands\Actions\ModulePruneCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleUnuseCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMakeViewCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleEnableCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleNotification;
-use Rcv\Core\Console\Commands\Make\ModuleMakeEventCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMakeScopeCommand;
-use Rcv\Core\Console\Commands\Make\ModuleModelMakeCommand;
-use Rcv\Core\Console\Commands\Publish\ModulePublishConfig;
-use Rcv\Core\Console\Commands\Actions\ModuleDisableCommand;
-use Rcv\Core\Console\Commands\Database\Seeders\ListSeeders;
-use Rcv\Core\Console\Commands\Make\ModuleMakeHelperCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMiddlewareCommand;
-use Rcv\Core\Console\Commands\ModuleDependencyGraphCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleArtisanCommand;
-use Rcv\Core\Console\Commands\Make\ModuleServiceMakeCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleShowModelCommand;
-use Rcv\Core\Console\Commands\Make\ModuleResourceMakeCommand;
-use Rcv\Core\Console\Commands\Publish\ModulePublishMigration;
-use Rcv\Core\Console\Commands\Make\ModuleEventProviderCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMakeExceptionCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleMarketplaceCommand;
-use Rcv\Core\Console\Commands\Make\ModuleControllerMakeCommand;
-use Rcv\Core\Console\Commands\Make\ModuleRepositoryMakeCommand;
-use Rcv\Core\Console\Commands\Publish\ModulePublishTranslation;
-use Rcv\Core\Console\Commands\Actions\ModuleCheckUpdatesCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleCommandsListCommand;
-use Rcv\Core\Console\Commands\Database\Seeders\MakeModuleSeeder;
-use Rcv\Core\Console\Commands\Database\Migrations\MigrateRefresh;
-use Rcv\Core\Console\Commands\Database\Seeders\ModuleSeedCommand;
-use Rcv\Core\Console\Commands\Make\ModuleRouteProviderMakeCommand;
-use Rcv\Core\Console\Commands\Database\Factories\MakeModuleFactory;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrateFresh;
-use Rcv\Core\Console\Commands\Database\Migrations\MigrateStatusCommand;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrateCommand;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrationMakeCommand;
-use Rcv\Core\Console\Commands\Database\Migrations\MigrateSingleModuleMigration;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrateRollbackCommand;
+use RCV\Core\Contracts\ServiceInterface;
+use RCV\Core\Repositories\BaseRepository;
+use RCV\Core\Repositories\MainRepository;
+use RCV\Core\Services\MarketplaceService;
+use RCV\Core\Contracts\RepositoryInterface;
+use RCV\Core\Console\Commands\Make\MakeEnum;
+use RCV\Core\Console\Commands\Make\MakeAction;
+use RCV\Core\Console\Commands\Make\MakeChannel;
+use RCV\Core\Services\ModuleRegistrationService;
+use RCV\Core\Services\ModuleMetrics;
+use RCV\Core\Services\Security\AccessManager;
+use RCV\Core\Services\Security\RbacManager;
+use RCV\Core\Services\Security\AbacEvaluator;
+use RCV\Core\Services\Communication\RpcManager;
+use RCV\Core\Services\Messaging\MessageBus;
+use RCV\Core\Console\Commands\Docs\GenerateDocs;
+use RCV\Core\Console\Commands\Upgrade\ModuleUpgradeCommand;
+use RCV\Core\Console\Commands\DevOps\PublishDevopsAssets;
+use RCV\Core\Console\Commands\DevTools\ModuleProfileCommand;
+use RCV\Core\Console\Commands\Analyze\ModuleAnalyzeCommand;
+use RCV\Core\Console\Commands\ModuleDebugCommand;
+use RCV\Core\Console\Commands\ModuleSetupCommand;
+use RCV\Core\Console\Commands\ModuleStateCommand;
+use RCV\Core\Console\Commands\Make\MakeJobCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleRule;
+use RCV\Core\Console\Commands\ModuleBackupCommand;
+use RCV\Core\Console\Commands\ModuleClearCompiled;
+use RCV\Core\Console\Commands\Make\MakeCastCommand;
+use RCV\Core\Console\Commands\Make\MakeMailCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleClass;
+use RCV\Core\Console\Commands\Make\MakeModuleTrait;
+use RCV\Core\Console\Commands\MigrateV1ModulesToV2;
+use RCV\Core\Console\Commands\Make\MakeModulePolicy;
+use RCV\Core\Console\Commands\ModuleAutoloadCommand;
+use RCV\Core\Console\Commands\UpdatePhpunitCoverage;
+use RCV\Core\Console\Commands\DiscoverModulesCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleRequest;
+use RCV\Core\Console\Commands\Make\ModuleAllCommands;
+use RCV\Core\Console\Commands\Make\ModuleMakeCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleObserver;
+use RCV\Core\Console\Commands\Make\ModuleMakeListener;
+use RCV\Core\Console\Commands\Actions\ModuleUseCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleComponent;
+use RCV\Core\Console\Commands\ModuleHealthCheckCommand;
+use RCV\Core\Console\Commands\Make\MakeInterfaceCommand;
+use RCV\Core\Console\Commands\Actions\ModulePruneCommand;
+use RCV\Core\Console\Commands\Actions\ModuleUnuseCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeViewCommand;
+use RCV\Core\Console\Commands\Actions\ModuleEnableCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleNotification;
+use RCV\Core\Console\Commands\Make\ModuleMakeEventCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeScopeCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeModelCommand;
+use RCV\Core\Console\Commands\Publish\ModulePublishConfig;
+use RCV\Core\Console\Commands\Actions\ModuleDisableCommand;
+use RCV\Core\Console\Commands\Database\Seeders\ListSeeders;
+use RCV\Core\Console\Commands\Make\ModuleMakeHelperCommand;
+use RCV\Core\Console\Commands\Make\ModuleMiddlewareCommand;
+use RCV\Core\Console\Commands\ModuleDependencyGraphCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleArtisanCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeServiceCommand;
+use RCV\Core\Console\Commands\Actions\ModuleShowModelCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeResourceCommand;
+use RCV\Core\Console\Commands\Publish\ModulePublishMigration;
+use RCV\Core\Console\Commands\Make\ModuleEventProviderCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeExceptionCommand;
+use RCV\Core\Console\Commands\Actions\ModuleMarketplaceCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeControllerCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeRepositoryCommand;
+use RCV\Core\Console\Commands\Publish\ModulePublishTranslation;
+use RCV\Core\Console\Commands\Actions\ModuleCheckUpdatesCommand;
+use RCV\Core\Console\Commands\Actions\ModuleCommandsListCommand;
+use RCV\Core\Console\Commands\Database\Seeders\MakeModuleSeeder;
+use RCV\Core\Console\Commands\Database\Migrations\MigrateRefresh;
+use RCV\Core\Console\Commands\Database\Seeders\ModuleSeedCommand;
+use RCV\Core\Console\Commands\Make\ModuleRouteProviderMakeCommand;
+use RCV\Core\Console\Commands\Database\Factories\MakeModuleFactory;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateFresh;
+use RCV\Core\Console\Commands\Database\Migrations\MigrateStatusCommand;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateCommand;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrationMakeCommand;
+use RCV\Core\Console\Commands\Database\Migrations\MigrateSingleModuleMigration;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateRollbackCommand;
 
 class CoreServiceProvider extends ServiceProvider
 {
     protected $moduleName = 'Core';
     protected $moduleNameLower = 'core';
-    protected $moduleNamespace = 'Rcv\Core';
+    protected $moduleNamespace = 'RCV\Core';
 
     protected $commands = [
         // Action Commands
@@ -113,15 +123,14 @@ class CoreServiceProvider extends ServiceProvider
         // Make Commands
         ModuleAllCommands::class,
         ModuleMakeCommand::class,
-        ModuleControllerMakeCommand::class,
-        ModuleModelMakeCommand::class,
-        ModuleResourceMakeCommand::class,
-        ModuleRepositoryMakeCommand::class,
+        ModuleMakeControllerCommand::class,
+        ModuleMakeModelCommand::class,
+        ModuleMakeResourceCommand::class,
+        ModuleMakeRepositoryCommand::class,
         ModuleMakeEventCommand::class,
         ModuleMakeHelperCommand::class,
         ModuleMakeExceptionCommand::class,
         ModuleMakeScopeCommand::class,
-        MakeComponentView::class,
         MakeChannel::class,
         MakeModuleClass::class,
         MakeModuleArtisanCommand::class,
@@ -140,7 +149,7 @@ class CoreServiceProvider extends ServiceProvider
         ModulePublishMigration::class,
         ModulePublishTranslation::class,
         ModuleEventProviderCommand::class,
-        ModuleServiceMakeCommand::class,
+        ModuleMakeServiceCommand::class,
         MakeCastCommand::class,
         MakeJobCommand::class,
         MakeMailCommand::class,
@@ -184,6 +193,35 @@ class CoreServiceProvider extends ServiceProvider
         $this->app->singleton(ModuleRegistrationService::class);
         $this->app->singleton(MarketplaceService::class);
 
+        $this->app->singleton('rcv.core.module_metrics', function ($app) {
+            return new ModuleMetrics();
+        });
+
+        $this->app->singleton('rcv.core.security', function ($app) {
+            return new AccessManager();
+        });
+
+        $this->app->singleton('rcv.core.rpc', function ($app) {
+            return new RpcManager();
+        });
+
+        $this->app->singleton('rcv.core.rbac', function ($app) {
+            $rbac = new RbacManager();
+            $roles = config('security.rbac.roles', []);
+            foreach ($roles as $role => $perms) {
+                $rbac->defineRole($role, (array) $perms);
+            }
+            return $rbac;
+        });
+
+        $this->app->singleton('rcv.core.abac', function ($app) {
+            return new AbacEvaluator();
+        });
+
+        $this->app->singleton('rcv.core.message_bus', function ($app) {
+            return new MessageBus();
+        });
+
         $this->app->singleton(ModuleLoader::class, function ($app) {
             return new ModuleLoader();
         });
@@ -191,6 +229,15 @@ class CoreServiceProvider extends ServiceProvider
         $this->commands($this->commands);
 
         $this->registerModuleProviders();
+
+        // Additional commands
+        $this->commands([
+            GenerateDocs::class,
+            ModuleUpgradeCommand::class,
+            PublishDevopsAssets::class,
+            ModuleProfileCommand::class,
+            ModuleAnalyzeCommand::class,
+        ]);
     }
 
     /**
@@ -214,6 +261,9 @@ class CoreServiceProvider extends ServiceProvider
     {
         $configPath = __DIR__.'/../Config/config.php';
         $marketplaceConfigPath = __DIR__.'/../Config/marketplace.php';
+        $metricsConfigPath = __DIR__.'/../Config/metrics.php';
+        $securityConfigPath = __DIR__.'/../Config/security.php';
+        $communicationConfigPath = __DIR__.'/../Config/communication.php';
         
         if (File::exists($configPath)) {
             $this->mergeConfigFrom($configPath, 'core');
@@ -223,8 +273,23 @@ class CoreServiceProvider extends ServiceProvider
             $this->mergeConfigFrom($marketplaceConfigPath, 'marketplace');
         }
 
+        if (File::exists($metricsConfigPath)) {
+            $this->mergeConfigFrom($metricsConfigPath, 'metrics');
+        }
+
+        if (File::exists($securityConfigPath)) {
+            $this->mergeConfigFrom($securityConfigPath, 'security');
+        }
+
+        if (File::exists($communicationConfigPath)) {
+            $this->mergeConfigFrom($communicationConfigPath, 'communication');
+        }
+
         $this->publishes([
             __DIR__.'/../Config/config.php' => config_path('core.php'),
+            __DIR__.'/../Config/metrics.php' => config_path('metrics.php'),
+            __DIR__.'/../Config/security.php' => config_path('security.php'),
+            __DIR__.'/../Config/communication.php' => config_path('communication.php'),
         ], 'config');
     }
 
@@ -269,7 +334,7 @@ class CoreServiceProvider extends ServiceProvider
      */
     protected function registerViews(): void
     {
-        $viewPath = base_path('modules/Core/src/Resources/views');
+        $viewPath = base_path('Modules/Core/src/Resources/views');
         
         if (File::exists($viewPath)) {
             $this->loadViewsFrom($viewPath, 'core');

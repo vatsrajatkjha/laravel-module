@@ -1,5 +1,5 @@
 {
-    "name": "modules/{{ module_name_lower }}",
+    "name": "Modules/{{ module_name_lower }}",
     "description": "{{ module_name }} module for the application",
     "type": "laravel-module",
     "license": "MIT",

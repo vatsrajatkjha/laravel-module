@@ -40,7 +40,7 @@ return [
     |
     */
     'providers' => [
-        \Rcv\Core\Providers\CoreServiceProvider::class,
+        \RCV\Core\Providers\CoreServiceProvider::class,
     ],
 
     /*

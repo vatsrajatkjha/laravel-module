@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Cache;
@@ -9,15 +9,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Artisan;
-use Rcv\Core\Models\ModuleState;
-use Rcv\Core\Notifications\ModuleUpdateAvailable;
-use Rcv\Core\Events\ModuleInstalled;
-use Rcv\Core\Events\ModuleRemoved;
-use Rcv\Core\Events\ModuleEnabled;
-use Rcv\Core\Events\ModuleDisabled;
+use RCV\Core\Models\ModuleState;
+use RCV\Core\Notifications\ModuleUpdateAvailable;
+use RCV\Core\Events\ModuleInstalled;
+use RCV\Core\Events\ModuleRemoved;
+use RCV\Core\Events\ModuleEnabled;
+use RCV\Core\Events\ModuleDisabled;
 use Illuminate\Cache\CacheManager;
-use Rcv\Core\Events\ModuleUninstalled;
-use Rcv\Core\Services\ModuleRegistrationService;
+use RCV\Core\Events\ModuleUninstalled;
+use RCV\Core\Services\ModuleRegistrationService;
 
 class MarketplaceService
 {
@@ -38,7 +38,7 @@ class MarketplaceService
         $this->localPath = Config::get('marketplace.local.path', base_path('modules'));
         $this->cacheEnabled = Config::get('marketplace.cache.enabled', true);
         $this->cacheTtl = Config::get('marketplace.cache.ttl', 3600);
-        $this->backupPath = Config::get('marketplace.modules.backup.path', storage_path('app/modules/backups'));
+        $this->backupPath = Config::get('marketplace.modules.backup.path', storage_path('app/Modules/backups'));
         $this->modulePath = base_path('modules');
         $this->config = config('marketplace');
         $this->cacheManager = $cacheManager;
@@ -300,7 +300,7 @@ class MarketplaceService
     protected function backupModule(string $name): void
     {
         $modulePath = "{$this->modulePath}/{$name}";
-        $backupPath = storage_path("app/modules/backups/{$name}_" . date('Y_m_d_His'));
+        $backupPath = storage_path("app/Modules/backups/{$name}_" . date('Y_m_d_His'));
 
         if (!File::exists(dirname($backupPath))) {
             File::makeDirectory(dirname($backupPath), 0755, true);
@@ -317,7 +317,7 @@ class MarketplaceService
                 $composerFile = "{$this->localPath}/{$module['name']}/composer.json";
                 if (File::exists($composerFile)) {
                     $composer = json_decode(File::get($composerFile), true);
-                    if (isset($composer['require']["modules/{$name}"])) {
+                    if (isset($composer['require']["Modules/{$name}"])) {
                         throw new \Exception("Cannot remove module [{$name}] as it is required by [{$module['name']}]");
                     }
                 }
@@ -420,8 +420,8 @@ class MarketplaceService
             $composer = json_decode(File::get($composerFile), true);
             if (isset($composer['require'])) {
                 foreach ($composer['require'] as $package => $version) {
-                    if (strpos($package, 'modules/') === 0) {
-                        $moduleName = str_replace('modules/', '', $package);
+                    if (strpos($package, 'Modules/') === 0) {
+                        $moduleName = str_replace('Modules/', '', $package);
                         if (!$this->isModuleEnabled($moduleName)) {
                             $this->installModule($moduleName);
                         }
@@ -443,7 +443,7 @@ class MarketplaceService
     protected function unpublishAssets($name)
     {
         // Remove published assets
-        $publicPath = public_path("modules/{$name}");
+        $publicPath = public_path("Modules/{$name}");
         if (File::exists($publicPath)) {
             File::deleteDirectory($publicPath);
         }
@@ -458,7 +458,7 @@ class MarketplaceService
     protected function rollbackMigrations($name)
     {
         Artisan::call('migrate:rollback', [
-            '--path' => "packages/modules/{$name}/src/Database/Migrations",
+            '--path' => "Modules/{$name}/src/Database/Migrations",
             '--force' => true
         ]);
     }
@@ -538,8 +538,8 @@ class MarketplaceService
         }
         
         // Remove from require if exists
-        if (isset($composer['require']["modules/{$name}"])) {
-            unset($composer['require']["modules/{$name}"]);
+        if (isset($composer['require']["Modules/{$name}"])) {
+            unset($composer['require']["Modules/{$name}"]);
         }
         
         file_put_contents($composerPath, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -567,7 +567,7 @@ class MarketplaceService
 
     protected function runMigrations($name)
     {
-        $migrationPath = "packages/modules/{$name}/src/Database/Migrations";
+        $migrationPath = "Modules/{$name}/src/Database/Migrations";
         $moduleState = ModuleState::firstOrCreate(
             ['name' => $name],
             ['version' => $this->getModuleVersion($name), 'status' => 'installed']
@@ -675,7 +675,7 @@ class MarketplaceService
             Artisan::call('module:migrate', ['module' => $moduleName]);
 
             // Run module seeders if they exist
-            if (File::exists(base_path("packages/modules/{$moduleName}/src/Database/Seeders"))) {
+            if (File::exists(base_path("Modules/{$moduleName}/src/Database/Seeders"))) {
                 Artisan::call('module:seed', ['module' => $moduleName]);
             }
 
@@ -783,7 +783,7 @@ class MarketplaceService
         
         // Remove from require section (case-insensitive)
         if (isset($composerJson['require'])) {
-            $moduleKey = strtolower("modules/{$moduleName}");
+            $moduleKey = strtolower("Modules/{$moduleName}");
             foreach ($composerJson['require'] as $key => $value) {
                 if (strtolower($key) === $moduleKey) {
                     unset($composerJson['require'][$key]);

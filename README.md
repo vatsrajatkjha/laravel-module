@@ -143,9 +143,6 @@ Our modular architecture follows a **clean, organized structure** that promotes 
     │   │   └── 📄 config.php            # Module-specific config
     │   ├── 📁 Console/
     │   │   └── 📄 Commands/             # Artisan commands
-    │   ├── 📁 Contracts/
-    │   │   ├── 📄 UserRepositoryInterface.php
-    │   │   └── 📄 UserServiceInterface.php
     │   ├── 📁 Database/
     │   │   ├── 📁 Factories/            # Model factories
     │   │   ├── 📁 Migrations/           # Database migrations
@@ -189,6 +186,9 @@ Our modular architecture follows a **clean, organized structure** that promotes 
     │   │   ├── 📄 RouteServiceProvider.php
     │   │   └── 📄 EventServiceProvider.php
     │   ├── 📁 Repositories/
+    │   ├── └── 📁 Interfaces/
+    │   │   └── ├── 📄 UserRepositoryInterface.php
+    │   │   └── └── 📄 UserServiceInterface.php
     │   │   ├── 📄 UserRepository.php     # Data access layer
     │   │   └── 📄 UserProfileRepository.php
     │   ├── 📁 Resources/
@@ -355,10 +355,10 @@ php artisan module:make-resource {name} {module}         # Create API resource
 php artisan module:make-middleware {name} {module}       # Create middleware
 
 # 📧 Events & Notifications
-php artisan module:make-event {name} {module}            # Create event
-php artisan module:make-listener {name} {module}         # Create listener
-php artisan module:make-notification {name} {module}     # Create notification
-php artisan module:make-job {name} {module}              # Create job
+php artisan module:make-event {name} {module}                   # Create event
+php artisan module:make-listener {name} {eventName} {module}    # Create listener
+php artisan module:make-notification {name} {module}            # Create notification
+php artisan module:make-job {name} {module}                     # Create job
 
 # 🔐 Authorization
 php artisan module:make-policy {name} {module}           # Create policy
@@ -428,6 +428,7 @@ php artisan module:route-list {name}                     # List module routes
 - `module:make-mail` - Create a new mail
 - `module:make-artisan` - Create a new artisan command
 - `module:make-class` - Create a new class
+- `module:make-command` - Create a new command
 - `module:make-component` - Create a new component
 - `module:make-notification` - Create a new notification
 - `module:make-observer` - Create a new observer

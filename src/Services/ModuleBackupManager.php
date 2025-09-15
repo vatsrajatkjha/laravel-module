@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Config;
@@ -15,14 +15,14 @@ class ModuleBackupManager
 
     public function __construct()
     {
-        $this->backupPath = Config::get('marketplace.modules.backup.path', storage_path('app/modules/backups'));
+        $this->backupPath = Config::get('marketplace.modules.backup.path', storage_path('app/Modules/backups'));
         $this->maxBackups = Config::get('marketplace.modules.backup.max_backups', 5);
         $this->retentionDays = Config::get('marketplace.modules.backup.retention_days', 30);
     }
 
     public function createBackup(string $moduleName): string
     {
-        $modulePath = base_path("packages/modules/{$moduleName}");
+        $modulePath = base_path("Modules/{$moduleName}");
         $timestamp = Carbon::now()->format('Y_m_d_His');
         $backupDir = "{$this->backupPath}/{$moduleName}_{$timestamp}";
 
@@ -65,7 +65,7 @@ class ModuleBackupManager
 
             $metadata = json_decode(File::get("{$backupPath}/backup_metadata.json"), true);
             $moduleName = $metadata['module'];
-            $modulePath = base_path("packages/modules/{$moduleName}");
+            $modulePath = base_path("Modules/{$moduleName}");
 
             // Create a backup of current state before restore
             $this->createBackup($moduleName);
@@ -164,7 +164,7 @@ class ModuleBackupManager
 
     protected function getModuleVersion(string $moduleName): string
     {
-        $composerFile = base_path("packages/modules/{$moduleName}/composer.json");
+        $composerFile = base_path("Modules/{$moduleName}/composer.json");
         if (File::exists($composerFile)) {
             $composer = json_decode(File::get($composerFile), true);
             return $composer['version'] ?? '1.0.0';

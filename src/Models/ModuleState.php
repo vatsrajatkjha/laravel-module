@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Models;
+namespace RCV\Core\Models;
 
 use Illuminate\Database\Eloquent\Model;
 

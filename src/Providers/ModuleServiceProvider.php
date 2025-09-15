@@ -1,13 +1,13 @@
 <?php
 
-namespace Rcv\Core\Providers;
+namespace RCV\Core\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
-use Rcv\Core\Http\Middleware\ModuleMiddleware;
-use Rcv\Core\Http\Middleware\ModuleMiddlewareManager;
+use RCV\Core\Http\Middleware\ModuleMiddleware;
+use RCV\Core\Http\Middleware\ModuleMiddlewareManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -94,7 +94,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function registerConfig(): void
     {
         $moduleName = $this->getModuleName();
-        $configPath = base_path("modules/{$moduleName}/src/Config/config.php");
+        $configPath = base_path("Modules/{$moduleName}/src/Config/config.php");
         
         if (File::exists($configPath)) {
             $this->mergeConfigFrom($configPath, strtolower($moduleName));
@@ -134,7 +134,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
 
         if (File::exists($assetsPath)) {
             $this->publishes([
-                $assetsPath => public_path('modules/' . strtolower($moduleName)),
+                $assetsPath => public_path('Modules/' . strtolower($moduleName)),
             ], 'assets');
         }
     }
@@ -189,8 +189,8 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function registerRoutes(): void
     {
         $moduleName = $this->getModuleName();
-        $webRoutePath = realpath(base_path("modules/{$moduleName}/src/Routes/web.php"));
-        $apiRoutePath = realpath(base_path("modules/{$moduleName}/src/Routes/api.php"));
+        $webRoutePath = realpath(base_path("Modules/{$moduleName}/src/Routes/web.php"));
+        $apiRoutePath = realpath(base_path("Modules/{$moduleName}/src/Routes/api.php"));
 
         if ($webRoutePath && File::exists($webRoutePath)) {
             Route::middleware('web')
@@ -214,7 +214,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
         if (File::exists($viewsPath)) {
             $this->loadViewsFrom($viewsPath, $this->moduleNameLower);
             $this->publishes([
-                $viewsPath => resource_path('views/modules/' . $this->moduleNameLower),
+                $viewsPath => resource_path('views/Modules/' . $this->moduleNameLower),
             ], 'views');
         }
     }
@@ -230,7 +230,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function getMigrationsPath(): string
     {
         $moduleName = $this->getModuleName();
-        return base_path("modules/{$moduleName}/src/Database/Migrations");
+        return base_path("Modules/{$moduleName}/src/Database/Migrations");
     }
 
     /**
@@ -239,7 +239,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function getViewsPath(): string
     {
         $moduleName = $this->getModuleName();
-        return base_path("modules/{$moduleName}/src/Resources/views");
+        return base_path("Modules/{$moduleName}/src/Resources/views");
     }
 
     /**
@@ -248,7 +248,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function getConfigPath(): string
     {
         $moduleName = $this->getModuleName();
-        return base_path("modules/{$moduleName}/src/Config/config.php");
+        return base_path("Modules/{$moduleName}/src/Config/config.php");
     }
 
     /**
@@ -257,7 +257,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function getAssetsPath(): string
     {
         $moduleName = $this->getModuleName();
-        return base_path("modules/{$moduleName}/src/Resources/assets");
+        return base_path("Modules/{$moduleName}/src/Resources/assets");
     }
 
     protected function registerMiddlewareManager()
@@ -275,10 +275,10 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function registerCommands(): void
     {
         $this->commands([
-            \Rcv\Core\Console\Commands\ModuleHealthCheckCommand::class,
-            \Rcv\Core\Console\Commands\ModuleDependencyGraphCommand::class,
-            \Rcv\Core\Console\Commands\ModuleBackupCommand::class,
-            \Rcv\Core\Console\Commands\ModuleMiddlewareCommand::class,
+            \RCV\Core\Console\Commands\ModuleHealthCheckCommand::class,
+            \RCV\Core\Console\Commands\ModuleDependencyGraphCommand::class,
+            \RCV\Core\Console\Commands\ModuleBackupCommand::class,
+            \RCV\Core\Console\Commands\ModuleMiddlewareCommand::class,
         ]);
     }
 } 

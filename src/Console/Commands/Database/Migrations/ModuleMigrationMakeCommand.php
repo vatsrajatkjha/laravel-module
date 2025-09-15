@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Database\Migrations;
+namespace RCV\Core\Console\Commands\Database\Migrations;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
@@ -117,7 +117,7 @@ class ModuleMigrationMakeCommand extends Command
     protected function getDestinationFilePath()
     {
         $module = $this->argument('module');
-        $path = base_path("modules/{$module}/src/Database/Migrations/");
+        $path = base_path("Modules/{$module}/src/Database/Migrations/");
         return $path . $this->getFileName() . '.php';
     }
 

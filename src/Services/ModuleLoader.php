@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Config;
@@ -15,7 +15,7 @@ class ModuleLoader
     
     public function __construct()
     {
-        $this->modulePath = base_path('modules');
+        $this->modulePath = base_path('Modules');
     }
     
     public function loadModules()

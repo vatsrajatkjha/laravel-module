@@ -1,8 +1,8 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 use Illuminate\Console\Command;
-use Rcv\Core\Models\ModuleState;
+use RCV\Core\Models\ModuleState;
 use Illuminate\Support\Facades\File;
 
 class ModuleStateCommand extends Command

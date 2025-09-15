@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Actions;
+namespace RCV\Core\Console\Commands\Actions;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -25,7 +25,7 @@ class ModuleDisableCommand extends Command
 
         foreach ($names as $name) {
             $this->info("Disabling module [{$name}]...");
-            $modulePath = base_path("modules/{$name}");
+            $modulePath = base_path("Modules/{$name}");
 
             try {
                 if (!File::exists($modulePath)) {
@@ -73,7 +73,7 @@ class ModuleDisableCommand extends Command
                     foreach ($migrations as $migration) {
                         try {
                             $this->call('migrate:rollback', [
-                                '--path' => "modules/{$name}/src/Database/Migrations/{$migration}"
+                                '--path' => "Modules/{$name}/src/Database/Migrations/{$migration}"
                             ]);
                             $rolledBack[] = $migration;
                         } catch (\Exception $e) {
@@ -122,13 +122,13 @@ class ModuleDisableCommand extends Command
     protected function checkDependencies($name)
     {
         $dependentModules = [];
-        $modules = File::directories(base_path('modules'));
+        $modules = File::directories(base_path('Modules'));
 
         foreach ($modules as $path) {
             $composerJson = "{$path}/composer.json";
             if (File::exists($composerJson)) {
                 $config = json_decode(File::get($composerJson), true);
-                if (isset($config['require']["modules/" . strtolower($name)])) {
+                if (isset($config['require']["Modules/" . strtolower($name)])) {
                     $dependentModules[] = basename($path);
                 }
             }
@@ -139,7 +139,7 @@ class ModuleDisableCommand extends Command
 
     protected function removeFromModulesConfig($name)
     {
-        $configPath = base_path('modules/Core/src/Config/modules.php');
+        $configPath = base_path('Modules/Core/src/Config/modules.php');
         if (!File::exists($configPath)) return;
 
         $config = require $configPath;
@@ -163,7 +163,7 @@ class ModuleDisableCommand extends Command
 
         if (isset($composer['repositories'])) {
             $composer['repositories'] = array_filter($composer['repositories'], fn($repo) =>
-                !isset($repo['url']) || $repo['url'] !== "modules/{$name}"
+                !isset($repo['url']) || $repo['url'] !== "Modules/{$name}"
             );
         }
 
@@ -172,7 +172,7 @@ class ModuleDisableCommand extends Command
 
     protected function updateModuleJsonState($name)
     {
-        $path = base_path("modules/{$name}/module.json");
+        $path = base_path("Modules/{$name}/module.json");
         if (!File::exists($path)) return;
 
         $json = json_decode(File::get($path), true);

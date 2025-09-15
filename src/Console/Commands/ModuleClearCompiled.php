@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;    
+namespace RCV\Core\Console\Commands;    
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;

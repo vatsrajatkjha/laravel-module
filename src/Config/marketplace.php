@@ -55,13 +55,13 @@ return [
     'modules' => [
         'backup' => [
             'enabled' => true,
-            'path' => storage_path('app/modules/backups'),
+            'path' => storage_path('app/Modules/backups'),
         ],
         'download' => [
-            'path' => storage_path('app/modules/downloads'),
+            'path' => storage_path('app/Modules/downloads'),
         ],
         'extract' => [
-            'path' => base_path('packages/modules'),
+            'path' => base_path('modules'),
         ],
     ],
 

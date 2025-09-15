@@ -1,6 +1,6 @@
 <?php
 
-namespace  Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -8,42 +8,50 @@ use Illuminate\Support\Str;
 
 class MakeModuleClass extends Command
 {
-    protected $signature = 'module:make-class {module} {name}';
+    protected $signature = 'module:make-class 
+                            {name : The class name (can include subdirectories)} 
+                            {module : The module name}';
     protected $description = 'Create a new class using a stub file inside the specified module';
 
     public function handle()
     {
-        $module = $this->argument('module');     // e.g., Test
-        $classInput = $this->argument('name');  // e.g., services/notificationservice
+        $module = Str::studly($this->argument('module'));    // e.g., Test
+        $nameInput = $this->argument('name');                // e.g., services/NotificationService
 
-        $classPath = str_replace('\\', '/', $classInput);
-        $className = Str::studly(class_basename($classPath));
-        $subPath = dirname($classPath) !== '.' ? dirname($classPath) : '';
-        $namespace = "Modules\\{$module}" . ($subPath ? '\\' . str_replace('/', '\\', $subPath) : '');
+        // --- Handle subdirectories in class name ---
+        $parts = preg_split('/[\/\\\\]+/', $nameInput);
+        $className = Str::studly(array_pop($parts));
+        $subPath = implode('/', array_map([Str::class, 'studly'], $parts));
+        $subNamespace = implode('\\', array_map([Str::class, 'studly'], $parts));
 
-        $directory = base_path("Modules/{$module}/src/Class" . ($subPath ? '/' . $subPath : ''));
-        $fileName = basename($classPath) . '.php';
-        $filePath = "{$directory}/{$fileName}";
-
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
+        // --- Paths & Namespace ---
+        $moduleBasePath = base_path("Modules/{$module}");
+        if (!File::exists($moduleBasePath)) {
+            $this->error("Module '{$module}' does not exist.");
+            return Command::FAILURE;
         }
+
+        $directory = $moduleBasePath . "/src/Class" . ($subPath ? "/{$subPath}" : '');
+        $filePath = "{$directory}/{$className}.php";
+        $namespace = "Modules\\{$module}\\Class" . ($subNamespace ? "\\{$subNamespace}" : '');
 
         if (File::exists($filePath)) {
             $this->error("Class already exists: {$filePath}");
-            return;
+            return Command::FAILURE;
         }
 
-        // Use stub located inside the same directory as this command
-         $stubPath = __DIR__ . '/../stubs/class.stub';
+        File::ensureDirectoryExists($directory);
 
+        // --- Load stub ---
+        $stubPath = __DIR__ . '/../stubs/class.stub';
         if (!File::exists($stubPath)) {
             $this->error("Stub file not found at: {$stubPath}");
-            return;
+            return Command::FAILURE;
         }
 
-        $stub = file_get_contents($stubPath);
+        $stub = File::get($stubPath);
 
+        // --- Replace placeholders ---
         $content = str_replace(
             ['{{namespace}}', '{{class}}'],
             [$namespace, $className],
@@ -51,6 +59,10 @@ class MakeModuleClass extends Command
         );
 
         File::put($filePath, $content);
-        $this->info("Class created: {$filePath}");
+
+        $this->info("Class '{$className}' created successfully in module '{$module}'.");
+        $this->info("Path: {$filePath}");
+
+        return Command::SUCCESS;
     }
 }

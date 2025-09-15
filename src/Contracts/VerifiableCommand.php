@@ -1,5 +1,5 @@
 <?php
 
-namespace Rcv\Core\Contracts;
+namespace RCV\Core\Contracts;
 
 interface VerifiableCommand {}

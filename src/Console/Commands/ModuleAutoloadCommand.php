@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\Artisan;
  * - When cleaning up module configurations
  * - When fixing autoload issues
  *
- * @package Rcv\Core\Console\Commands
+ * @package RCV\Core\Console\Commands
  */
 class ModuleAutoloadCommand extends Command
 {
@@ -74,7 +74,7 @@ class ModuleAutoloadCommand extends Command
         
         // Add Core module back if not present
         if (!isset($autoload['Modules\\Core\\'])) {
-            $autoload['Modules\\Core\\'] = 'modules/Core/src/';
+            $autoload['Modules\\Core\\'] = 'Modules/Core/src/';
         }
         
         // Update composer.json

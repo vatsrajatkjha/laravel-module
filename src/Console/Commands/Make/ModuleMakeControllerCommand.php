@@ -1,11 +1,11 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
-class ModuleControllerMakeCommand extends Command
+class ModuleMakeControllerCommand extends Command
 {
     /**
      * The name and signature of the console command.
@@ -34,7 +34,7 @@ class ModuleControllerMakeCommand extends Command
         $isApi = $this->option('api');
 
         // Check if module exists
-        $modulePath = base_path("modules/{$module}");
+        $modulePath = base_path("Modules/{$module}");
         if (!File::exists($modulePath)) {
             $this->error("Module [{$module}] does not exist.");
             return 1;
@@ -78,7 +78,7 @@ class ModuleControllerMakeCommand extends Command
         $stub = File::get(__DIR__ . '/../stubs/base-controller.stub');
         $stub = str_replace('{{ module_name }}', $module, $stub);
 
-        $controllerPath = base_path("modules/{$module}/src/Http/Controllers");
+        $controllerPath = base_path("Modules/{$module}/src/Http/Controllers");
         if (!File::exists($controllerPath)) {
             File::makeDirectory($controllerPath, 0755, true);
         }
@@ -116,17 +116,27 @@ class ModuleControllerMakeCommand extends Command
     {
         $stub = File::get(__DIR__ . '/../stubs/' . $stub);
         $stub = str_replace('{{ module_name }}', $module, $stub);
-        $stub = str_replace('{{ class_name }}', $name, $stub);
+
+        // Extract class name (remove subdirectories)
+        $className = Str::studly(class_basename($name));
+        $stub = str_replace('{{ class_name }}', $className, $stub);
 
         if ($isResource) {
-            $resourceName = Str::studly(Str::singular($name));
+            $resourceName = Str::studly(Str::singular($className));
             $stub = str_replace('{{ resource_name }}', $resourceName, $stub);
             $stub = str_replace('{{ resource_name_lower }}', Str::camel($resourceName), $stub);
         }
 
-        File::put(
-            base_path("modules/{$module}/src/Http/Controllers/{$name}.php"),
-            $stub
-        );
+        // Full path with nested directories
+        $controllerPath = base_path("Modules/{$module}/src/Http/Controllers/{$name}.php");
+
+        // Ensure directory exists
+        $dir = dirname($controllerPath);
+        if (!File::exists($dir)) {
+            File::makeDirectory($dir, 0755, true);
+        }
+
+        File::put($controllerPath, $stub);
     }
+
 } 

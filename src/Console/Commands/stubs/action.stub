@@ -1,8 +1,8 @@
 <?php
 
-namespace Modules\{{module}}\Actions;
+namespace {{ namespace }};
 
-class {{class}}
+class {{ class }}
 {
     public function handle($data)
     {

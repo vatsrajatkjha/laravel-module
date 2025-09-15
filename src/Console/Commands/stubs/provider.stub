@@ -3,24 +3,27 @@
 namespace Modules\{{ module_name }}\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class {{ module_name }}ServiceProvider extends ServiceProvider
 {
-    protected $moduleName = '{{ module_name }}';
-    protected $moduleNameLower = '{{ module_name_lower }}';
+    protected string $moduleName = '{{ module_name }}';
+    protected string $moduleNameLower = '{{ module_name_lower }}';
 
     /**
      * Register services.
      */
     public function register(): void
     {
-        $this->mergeConfigFrom(
-            __DIR__.'/../Config/config.php', '{{ module_name_lower }}'
-        );
+        // Merge all module config files
+        $this->registerModuleConfigs();
 
-        $this->app->register({{ module_name }}EventServiceProvider::class);
+        // Register EventServiceProvider if exists
+        $eventProvider = "Modules\\{$this->moduleName}\\Providers\\{$this->moduleName}EventServiceProvider";
+        if (class_exists($eventProvider)) {
+            $this->app->register($eventProvider);
+        }
     }
 
     /**
@@ -28,7 +31,7 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->registerConfig();
+        $this->publishModuleConfigs();
         $this->registerCommands();
         $this->registerRoutes();
         $this->registerViews();
@@ -38,28 +41,55 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register config.
+     * Dynamically merge all config files from the module's Config directory.
      */
-    protected function registerConfig(): void
+    protected function registerModuleConfigs(): void
     {
-        $this->publishes([
-            __DIR__.'/../Config/config.php' => config_path('{{ module_name_lower }}.php'),
-        ], 'config');
-
-        $this->mergeConfigFrom(
-            __DIR__.'/../Config/config.php', '{{ module_name_lower }}'
-        );
+        $configPath = __DIR__ . '/../Config';
+        if (File::isDirectory($configPath)) {
+            foreach (File::files($configPath) as $file) {
+                if ($file->getExtension() === 'php') {
+                    $key = $file->getBasename('.php');
+                    $this->mergeConfigFrom($file->getRealPath(), $key);
+                }
+            }
+        }
     }
 
     /**
-     * Register commands.
+     * Publish all module config files.
+     */
+    protected function publishModuleConfigs(): void
+    {
+        $configPath = __DIR__ . '/../Config';
+        if (File::isDirectory($configPath)) {
+            $publish = [];
+            foreach (File::files($configPath) as $file) {
+                if ($file->getExtension() === 'php') {
+                    $publish[$file->getRealPath()] = config_path($file->getFilename());
+                }
+            }
+            if (!empty($publish)) {
+                $this->publishes($publish, ['config', "{$this->moduleNameLower}-config"]);
+            }
+        }
+    }
+
+    /**
+     * Register commands automatically from Console folder.
      */
     protected function registerCommands(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([
-                // Add your commands here
-            ]);
+            $commandPath = __DIR__ . '/../Console';
+            if (File::isDirectory($commandPath)) {
+                foreach (File::files($commandPath) as $file) {
+                    $class = "Modules\\{$this->moduleName}\\Console\\" . $file->getBasename('.php');
+                    if (class_exists($class)) {
+                        $this->commands([$class]);
+                    }
+                }
+            }
         }
     }
 
@@ -69,8 +99,8 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
     protected function registerRoutes(): void
     {
         try {
-            $webRoutePath = __DIR__.'/../Routes/web.php';
-            $apiRoutePath = __DIR__.'/../Routes/api.php';
+            $webRoutePath = __DIR__ . '/../Routes/web.php';
+            $apiRoutePath = __DIR__ . '/../Routes/api.php';
 
             if (file_exists($webRoutePath)) {
                 $this->loadRoutesFrom($webRoutePath);
@@ -80,7 +110,7 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
                 $this->loadRoutesFrom($apiRoutePath);
             }
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Error in {{ module_name }}ServiceProvider registerRoutes: " . $e->getMessage());
+            Log::error("Error in {$this->moduleName}ServiceProvider registerRoutes: " . $e->getMessage());
             throw $e;
         }
     }
@@ -90,14 +120,16 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
      */
     protected function registerViews(): void
     {
-        $viewPath = resource_path('views/modules/{{ module_name_lower }}');
-        $sourcePath = __DIR__.'/../Resources/views';
+        $viewPath = resource_path("views/modules/{$this->moduleNameLower}");
+        $sourcePath = __DIR__ . '/../Resources/views';
 
-        $this->publishes([
-            $sourcePath => $viewPath
-        ], ['views', '{{ module_name_lower }}-module-views']);
+        if (File::isDirectory($sourcePath)) {
+            $this->publishes([
+                $sourcePath => $viewPath
+            ], ['views', "{$this->moduleNameLower}-views"]);
 
-        $this->loadViewsFrom($sourcePath, '{{ module_name_lower }}');
+            $this->loadViewsFrom($sourcePath, $this->moduleNameLower);
+        }
     }
 
     /**
@@ -105,7 +137,10 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
      */
     protected function registerTranslations(): void
     {
-        $this->loadTranslationsFrom(__DIR__.'/../Resources/lang', '{{ module_name_lower }}');
+        $langPath = __DIR__ . '/../Resources/lang';
+        if (File::isDirectory($langPath)) {
+            $this->loadTranslationsFrom($langPath, $this->moduleNameLower);
+        }
     }
 
     /**
@@ -113,15 +148,18 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
      */
     protected function registerMigrations(): void
     {
-        $this->loadMigrationsFrom(__DIR__.'/../Database/Migrations');
+        $migrationPath = __DIR__ . '/../Database/Migrations';
+        if (File::isDirectory($migrationPath)) {
+            $this->loadMigrationsFrom($migrationPath);
+        }
     }
 
     /**
-    * Register compoenents
-    */
-
+     * Register Blade/Livewire components.
+     */
     protected function registerComponents(): void
     {
-       
+        // Example:
+        // \Illuminate\Support\Facades\Blade::component('x-alert', \Modules\{{ module_name }}\View\Components\Alert::class);
     }
-} 
+}

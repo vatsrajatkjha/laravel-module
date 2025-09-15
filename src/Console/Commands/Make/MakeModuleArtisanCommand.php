@@ -1,6 +1,6 @@
 <?php
 
-namespace  Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -8,38 +8,50 @@ use Illuminate\Support\Str;
 
 class MakeModuleArtisanCommand extends Command
 {
-    protected $signature = 'module:make-command {module} {name}';
+    protected $signature = 'module:make-command 
+                            {name : The command class name (can include subdirectories)} 
+                            {module : The module name}';
     protected $description = 'Generate a new Artisan command for the specified module';
 
     public function handle()
     {
-        $module = $this->argument('module'); // e.g. Blog
-        $commandName = $this->argument('name'); // e.g. SyncPosts
+        $module = Str::studly($this->argument('module'));    // e.g., Blog
+        $nameInput = $this->argument('name');                // e.g., Sync/Posts
 
-        $className = Str::studly(class_basename($commandName));
-        $directory = base_path("Modules/{$module}/src/Console/Commands");
-        $filePath = "{$directory}/{$className}.php";
+        // --- Handle subdirectories ---
+        $parts = preg_split('/[\/\\\\]+/', $nameInput);
+        $className = Str::studly(array_pop($parts));
+        $subPath = implode('/', array_map([Str::class, 'studly'], $parts));
+        $subNamespace = implode('\\', array_map([Str::class, 'studly'], $parts));
 
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
+        // --- Paths & Namespace ---
+        $moduleBasePath = base_path("Modules/{$module}");
+        if (!File::exists($moduleBasePath)) {
+            $this->error("Module '{$module}' does not exist.");
+            return Command::FAILURE;
         }
+
+        $directory = $moduleBasePath . "/src/Console/Commands" . ($subPath ? "/{$subPath}" : '');
+        $filePath = "{$directory}/{$className}.php";
+        $namespace = "Modules\\{$module}\\Console\\Commands" . ($subNamespace ? "\\{$subNamespace}" : '');
 
         if (File::exists($filePath)) {
             $this->error("Command already exists: {$filePath}");
-            return;
+            return Command::FAILURE;
         }
 
-                 $stubPath = __DIR__ . '/../stubs/console-command.stub';
+        File::ensureDirectoryExists($directory);
 
+        // --- Load stub ---
+        $stubPath = __DIR__ . '/../stubs/console-command.stub';
         if (!File::exists($stubPath)) {
             $this->error("Stub file not found at: {$stubPath}");
-            return;
+            return Command::FAILURE;
         }
 
-        $stub = file_get_contents($stubPath);
+        $stub = File::get($stubPath);
 
-        $namespace = "Modules\\{$module}\\Console\\Commands";
-
+        // --- Replace placeholders ---
         $content = str_replace(
             ['{{namespace}}', '{{class}}', '{{signature}}'],
             [$namespace, $className, Str::kebab($className)],
@@ -47,6 +59,10 @@ class MakeModuleArtisanCommand extends Command
         );
 
         File::put($filePath, $content);
-        $this->info("Command created: {$filePath}");
+
+        $this->info("Artisan command '{$className}' created successfully in module '{$module}'.");
+        $this->info("Path: {$filePath}");
+
+        return Command::SUCCESS;
     }
 }

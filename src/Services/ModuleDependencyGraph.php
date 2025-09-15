@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Cache;
@@ -16,7 +16,7 @@ class ModuleDependencyGraph
 
     public function __construct(CacheManager $cacheManager, MarketplaceService $marketplaceService)
     {
-        $this->modulePath = base_path('packages/modules');
+        $this->modulePath = base_path('Modules');
         $this->cacheManager = $cacheManager;
         $this->marketplaceService = $marketplaceService;
         $this->cacheEnabled = Config::get('cache.enabled', false);
@@ -115,8 +115,8 @@ class ModuleDependencyGraph
             $composer = json_decode(File::get($composerFile), true);
             if (isset($composer['require'])) {
                 foreach ($composer['require'] as $package => $version) {
-                    if (strpos($package, 'modules/') === 0) {
-                        $dependencies[] = str_replace('modules/', '', $package);
+                    if (strpos($package, 'Modules/') === 0) {
+                        $dependencies[] = str_replace('Modules/', '', $package);
                     }
                 }
             }

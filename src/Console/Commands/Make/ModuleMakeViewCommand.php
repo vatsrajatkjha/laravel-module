@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -17,17 +17,19 @@ class ModuleMakeViewCommand extends Command
     public function handle(): int
     {
         $view = $this->argument('name');
-        $module = Str::studly($this->argument('module'));
+        $module = $this->getModuleName();
 
         $path = $this->getDestinationFilePath();
         $directory = dirname($path);
 
+        // Check if view already exists
         if (File::exists($path)) {
             $this->error("View file already exists: {$path}");
             return Command::FAILURE;
         }
 
-        if (! File::isDirectory($directory)) {
+        // Ensure directory exists
+        if (!File::isDirectory($directory)) {
             File::makeDirectory($directory, 0755, true);
         }
 
@@ -39,10 +41,13 @@ class ModuleMakeViewCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Get the stub contents with placeholders replaced.
+     */
     protected function getTemplateContents(): string
     {
         $view = $this->argument('name');
-        $module = Str::studly($this->argument('module'));
+        $module = $this->getModuleName();
 
         $stubPath = __DIR__ . '/../stubs/view.stub';
 
@@ -60,13 +65,25 @@ class ModuleMakeViewCommand extends Command
         );
     }
 
+    /**
+     * Get the full path where the view file should be created.
+     */
     protected function getDestinationFilePath(): string
     {
         $view = $this->argument('name');
-        $module = Str::studly($this->argument('module'));
+        $module = $this->getModuleName();
 
+        // Convert dot notation to directory structure
         $viewPath = str_replace('.', '/', $view) . '.blade.php';
 
         return base_path("Modules/{$module}/src/resources/views/{$viewPath}");
+    }
+
+    /**
+     * Get the formatted module name.
+     */
+    protected function getModuleName(): string
+    {
+        return Str::studly($this->argument('module'));
     }
 }
