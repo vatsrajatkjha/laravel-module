@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(nothing yet)_
 
+## [1.2.0] - 2025-09-16
+
+### Added
+- New **DevOps stubs**: `DOCKER_SETUP.md`, `Dockerfile`, `dockerignore`, and configs under `/docker` (`php.ini`, `nginx.conf`, `supervisord.conf`).
+- `ModuleUninstalled` event added for lifecycle tracking.
+- Extended `PublishDevopsAssets` command to generate structured files for CI/CD, Docker, and K8s setups.
+
+### Changed
+- Updated **README.md** with DevOps publish command usage and documentation.
+- Improved migration stubs:
+  - Fixed `delete.stub` to correctly generate column drop migrations.
+  - Fixed `drop.stub` to properly handle table name resolution.
+- Enhanced **controller stubs** to resolve namespaces in subdirectories.
+- Refined `ModuleMarketplaceCommand` with better details, updates, and error handling.
+- Refactored `ModuleAnalyzeCommand` to integrate with `ModuleDependencyGraph` service.
+- Improved `MarketplaceService`, `ModuleDependencyGraph`, and `ModuleHealthCheck` for reliability and production readiness.
+
+### Fixed
+- Resolved missing stub errors for DevOps commands.
+- Fixed incorrect table name handling in **delete** and **drop** migration generators.
+- Ensured generated controller namespaces match actual folder structure.
+
+---
+
 ## [1.1.0] - 2025-09-15
 
 ### Added

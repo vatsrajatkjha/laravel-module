@@ -7,7 +7,7 @@ use Illuminate\Filesystem\Filesystem;
 
 class MakeModuleFactory extends Command
 {
-    protected $signature = 'module:make-factory 
+    protected $signature = 'module:make-factory
                             {name : The name of the factory}
                             {module : The name of the module}';
 

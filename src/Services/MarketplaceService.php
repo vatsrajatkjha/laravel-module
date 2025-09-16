@@ -2,6 +2,7 @@
 
 namespace RCV\Core\Services;
 
+use Exception;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
@@ -9,805 +10,361 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Cache\CacheManager;
 use RCV\Core\Models\ModuleState;
 use RCV\Core\Notifications\ModuleUpdateAvailable;
-use RCV\Core\Events\ModuleInstalled;
-use RCV\Core\Events\ModuleRemoved;
-use RCV\Core\Events\ModuleEnabled;
-use RCV\Core\Events\ModuleDisabled;
-use Illuminate\Cache\CacheManager;
-use RCV\Core\Events\ModuleUninstalled;
+use RCV\Core\Events\{ModuleInstalled, ModuleRemoved, ModuleEnabled, ModuleDisabled, ModuleUninstalled};
 use RCV\Core\Services\ModuleRegistrationService;
 
 class MarketplaceService
 {
-    protected $localPath;
-    protected $cacheEnabled;
-    protected $cacheTtl;
-    protected $backupPath;
-    protected $modulePath;
-    protected $config;
-    protected $cacheManager;
-    protected $moduleRegistrationService;
+    protected string $modulePath;
+    protected string $backupPath;
+    protected string $localPath;
+    protected bool $cacheEnabled;
+    protected int $cacheTtl;
+    protected ?CacheManager $cacheManager;
+    protected ModuleRegistrationService $moduleRegistrationService;
 
     public function __construct(
         ?CacheManager $cacheManager = null,
         ModuleRegistrationService $moduleRegistrationService
-    )
-    {
-        $this->localPath = Config::get('marketplace.local.path', base_path('modules'));
+    ) {
+        $this->localPath = Config::get('marketplace.local.path', base_path('Modules'));
         $this->cacheEnabled = Config::get('marketplace.cache.enabled', true);
         $this->cacheTtl = Config::get('marketplace.cache.ttl', 3600);
         $this->backupPath = Config::get('marketplace.modules.backup.path', storage_path('app/Modules/backups'));
-        $this->modulePath = base_path('modules');
-        $this->config = config('marketplace');
+        $this->modulePath = base_path('Modules');
         $this->cacheManager = $cacheManager;
         $this->moduleRegistrationService = $moduleRegistrationService;
     }
 
-    public function getAvailableModules()
+    /* -----------------------------------------------------------------
+     |  Public API
+     | -----------------------------------------------------------------
+     */
+
+    public function list(): array
     {
-        // Temporarily bypass cache for debugging
-        return $this->discoverModules();
-
-        // Original cached version
-        if ($this->cacheManager && $this->cacheEnabled) {
-            return $this->cacheManager->remember('modules.list', $this->cacheTtl, function () {
-                return $this->discoverModules();
-            });
-        }
-
-        return $this->discoverModules();
+        return $this->cacheEnabled && $this->cacheManager
+            ? $this->cacheManager->remember('modules.list', $this->cacheTtl, fn() => $this->discoverModules())
+            : $this->discoverModules();
     }
 
-    public function getModuleDetails(string $name)
+    public function details(string $name): array
     {
-        if ($this->cacheManager && $this->cacheEnabled) {
-            return $this->cacheManager->remember($this->getModuleCacheKey($name), $this->cacheTtl, function () use ($name) {
-                return $this->getLocalModuleDetails($name);
-            });
-        }
-
-        return $this->getLocalModuleDetails($name);
+        return $this->cacheEnabled && $this->cacheManager
+            ? $this->cacheManager->remember($this->cacheKey($name), $this->cacheTtl, fn() => $this->getLocalDetails($name))
+            : $this->getLocalDetails($name);
     }
 
-    protected function getModuleCacheKey(string $name): string
+    public function install(string $name): bool
     {
-        return 'module.' . strtolower($name);
-    }
+        return $this->transaction(function () use ($name) {
+            $this->assertModuleExists($name);
 
-    public function installModule($name)
-    {
-        try {
-            DB::beginTransaction();
-
-            // Special handling for Core module
-            if ($name === 'Core') {
-                $moduleState = ModuleState::firstOrCreate(
-                    ['name' => $name],
-                    [
-                        'version' => $this->getModuleVersion($name),
-                        'status' => 'installed',
-                        'enabled' => true,
-                        'last_enabled_at' => now()
-                    ]
-                );
-                $moduleState->status = 'installed';
-                $moduleState->enabled = true;
-                $moduleState->last_enabled_at = now();
-                $moduleState->save();
-                
-                DB::commit();
-                return true;
-            }
-
-            // 1. Check if module exists
-            $modulePath = $this->modulePath . '/' . $name;
-            if (!File::exists($modulePath)) {
-                throw new \Exception("Module [{$name}] not found");
-            }
-
-            // 2. Install dependencies from composer.json
             $this->installDependencies($name);
-
-            // 3. Register service provider
-            $this->registerServiceProvider($name);
-
-            // 4. Run migrations with status tracking
+            $this->moduleRegistrationService->registerModule($name);
             $this->runMigrations($name);
-
-            // 5. Publish assets and configs
             $this->publishAssets($name);
 
-            // 6. Update module state
-            $moduleState = ModuleState::firstOrCreate(
-                ['name' => $name],
-                [
-                    'version' => $this->getModuleVersion($name),
-                    'status' => 'installed',
-                    'enabled' => false,
-                    'applied_migrations' => [],
-                    'failed_migrations' => []
-                ]
-            );
-            $moduleState->status = 'installed';
-            $moduleState->enabled = false;
-            $moduleState->save();
+            $this->updateState($name, 'installed', false);
+            $this->clearModuleCache($name);
 
-            // 7. Clear caches
-            if ($this->cacheManager) {
-                $this->cacheManager->forget($this->getModuleCacheKey($name));
-                $this->cacheManager->forget('modules.list');
-            }
-
-            // 8. Fire event
             Event::dispatch(new ModuleInstalled($name));
-
-            DB::commit();
-            return true;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
+        });
     }
 
-    public function removeModule($name, $force = false)
+    public function uninstall(string $name): bool
     {
-        try {
-            DB::beginTransaction();
+        return $this->transaction(function () use ($name) {
+            $this->assertModuleInstalled($name);
 
-            // Check if module directory exists
-            $modulePath = "{$this->modulePath}/{$name}";
-            
-            // Try to find module state, but don't fail if not found
-            $moduleState = ModuleState::where('name', $name)->first();
-            
-            if ($moduleState) {
-                // Remove from database
-                $moduleState->delete();
+            $this->runUninstallMigrations($name);
+            $this->moduleRegistrationService->unregisterModule($name);
+            $this->updateState($name, 'uninstalled', false);
+
+            $this->clearModuleCache($name);
+            Event::dispatch(new ModuleUninstalled($name));
+        });
+    }
+
+    public function remove(string $name, bool $force = false): bool
+    {
+        return $this->transaction(function () use ($name, $force) {
+            if (!$force) {
+                $this->checkDependencies($name);
             }
 
-            // Remove module files if they exist
+            $modulePath = "{$this->modulePath}/{$name}";
             if (File::exists($modulePath)) {
                 File::deleteDirectory($modulePath);
             }
 
-            // Clear caches
-            if ($this->cacheManager) {
-                $this->cacheManager->forget($this->getModuleCacheKey($name));
-                $this->cacheManager->forget('modules.list');
-            }
+            ModuleState::where('name', $name)->delete();
 
-            DB::commit();
-
-            event(new ModuleRemoved($name));
-
-            return true;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw new \Exception("Failed to remove module: " . $e->getMessage());
-        }
+            $this->clearModuleCache($name);
+            Event::dispatch(new ModuleRemoved($name));
+        });
     }
 
-    public function enableModule($name)
+    public function enable(string $name): bool
     {
-        try {
-            DB::beginTransaction();
+        return $this->transaction(function () use ($name) {
+            $this->assertModuleInstalled($name);
+            $this->updateState($name, 'installed', true);
 
-            // Special handling for Core module
-            if ($name === 'Core') {
-                $moduleState = ModuleState::firstOrCreate(
-                    ['name' => $name],
-                    [
-                        'version' => $this->getModuleVersion($name),
-                        'status' => 'installed',
-                        'enabled' => true,
-                        'last_enabled_at' => now()
-                    ]
-                );
-                $moduleState->enabled = true;
-                $moduleState->last_enabled_at = now();
-                $moduleState->save();
-                
-                DB::commit();
-                return true;
-            }
+            $this->moduleRegistrationService->registerModule($name);
+            $this->clearModuleCache($name);
 
-            // 1. Check if module exists
-            $modulePath = $this->modulePath . '/' . $name;
-            if (!File::exists($modulePath)) {
-                throw new \Exception("Module [{$name}] not found");
-            }
-
-            // 2. Check if module is installed
-            $moduleState = ModuleState::where('name', $name)->first();
-            if (!$moduleState) {
-                // If module state doesn't exist, create it
-                $moduleState = ModuleState::create([
-                    'name' => $name,
-                    'version' => $this->getModuleVersion($name),
-                    'status' => 'installed',
-                    'enabled' => false,
-                    'applied_migrations' => [],
-                    'failed_migrations' => []
-                ]);
-            }
-
-            if ($moduleState->status !== 'installed') {
-                throw new \Exception("Module [{$name}] is not installed");
-            }
-
-            // 3. Update module state
-            $moduleState->enabled = true;
-            $moduleState->last_enabled_at = now();
-            $moduleState->save();
-
-            // 4. Clear caches
-            if ($this->cacheManager) {
-                $this->cacheManager->forget($this->getModuleCacheKey($name));
-                $this->cacheManager->forget('modules.list');
-            }
-
-            // 5. Fire event
             Event::dispatch(new ModuleEnabled($name));
-
-            DB::commit();
-            return true;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
+        });
     }
 
-    public function disableModule($name)
+    public function disable(string $name): bool
     {
-        try {
-            DB::beginTransaction();
+        return $this->transaction(function () use ($name) {
+            $this->assertModuleInstalled($name);
+            $this->updateState($name, 'installed', false);
 
-            // 1. Check if module exists
-            $modulePath = $this->modulePath . '/' . $name;
-            if (!File::exists($modulePath)) {
-                throw new \Exception("Module [{$name}] not found");
-            }
+            $this->moduleRegistrationService->unregisterModule($name);
+            $this->clearModuleCache($name);
 
-            // 2. Check if module is installed
-            $moduleState = ModuleState::where('name', $name)->first();
-            if (!$moduleState || $moduleState->status !== 'installed') {
-                throw new \Exception("Module [{$name}] is not installed");
-            }
-
-            // 3. Update module state
-            $moduleState->enabled = false;
-            $moduleState->save();
-
-            // 4. Clear caches
-            if ($this->cacheManager) {
-                $this->cacheManager->forget($this->getModuleCacheKey($name));
-                $this->cacheManager->forget('modules.list');
-            }
-
-            // 5. Fire event
             Event::dispatch(new ModuleDisabled($name));
-
-            DB::commit();
-            return true;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
+        });
     }
 
-    protected function backupModule(string $name): void
+    public function checkForUpdates(): array
     {
-        $modulePath = "{$this->modulePath}/{$name}";
-        $backupPath = storage_path("app/Modules/backups/{$name}_" . date('Y_m_d_His'));
-
-        if (!File::exists(dirname($backupPath))) {
-            File::makeDirectory(dirname($backupPath), 0755, true);
-        }
-
-        File::copyDirectory($modulePath, $backupPath);
-    }
-
-    protected function checkDependencies($name)
-    {
-        $modules = $this->getAvailableModules();
-        foreach ($modules as $module) {
-            if ($module['name'] !== $name && $module['status'] === 'enabled') {
-                $composerFile = "{$this->localPath}/{$module['name']}/composer.json";
-                if (File::exists($composerFile)) {
-                    $composer = json_decode(File::get($composerFile), true);
-                    if (isset($composer['require']["Modules/{$name}"])) {
-                        throw new \Exception("Cannot remove module [{$name}] as it is required by [{$module['name']}]");
-                    }
-                }
-            }
-        }
-    }
-
-    public function checkForUpdates()
-    {
-        $modules = $this->getAvailableModules();
         $updates = [];
-        
-        foreach ($modules as $module) {
-            $moduleState = ModuleState::where('name', $module['name'])->first();
-            if ($moduleState && version_compare($moduleState->version, $module['version'], '<')) {
-                $updates[] = array_merge($module, [
-                    'current_version' => $moduleState->version
-                ]);
+        foreach ($this->list() as $module) {
+            $state = ModuleState::where('name', $module['name'])->first();
+            if ($state && version_compare($state->version, $module['version'], '<')) {
+                $updates[] = [...$module, 'current_version' => $state->version];
             }
         }
-        
+
         if (!empty($updates) && Config::get('marketplace.notifications.enabled')) {
             $this->sendUpdateNotifications($updates);
         }
-        
+
         return $updates;
     }
 
-    protected function discoverModules()
+    /* -----------------------------------------------------------------
+     |  Helpers
+     | -----------------------------------------------------------------
+     */
+
+    protected function cacheKey(string $name): string
+    {
+        return 'module.' . strtolower($name);
+    }
+
+    protected function discoverModules(): array
     {
         $modules = [];
-        
-        if (File::exists($this->modulePath)) {
-            $directories = File::directories($this->modulePath);
-            
-            foreach ($directories as $directory) {
-                $moduleName = basename($directory);
-                $composerJson = "{$directory}/composer.json";
-                $moduleState = ModuleState::where('name', $moduleName)->first();
-                
-                if (File::exists($composerJson)) {
-                    $moduleData = json_decode(File::get($composerJson), true);
-                } else {
-                    $moduleData = [];
-                }
-                
-                $modules[] = [
-                    'name' => $moduleName,
-                    'version' => $moduleData['version'] ?? '1.0.0',
-                    'description' => $moduleData['description'] ?? $moduleName . ' module for the application',
-                    'status' => $moduleState && $moduleState->enabled ? 'enabled' : 'disabled'
-                ];
-            }
+        if (!File::exists($this->modulePath)) {
+            return [];
         }
-        
+
+        foreach (File::directories($this->modulePath) as $directory) {
+            $name = basename($directory);
+            $composer = "{$directory}/composer.json";
+
+            $data = File::exists($composer) ? json_decode(File::get($composer), true) : [];
+            $state = ModuleState::where('name', $name)->first();
+
+            $modules[] = [
+                'name'        => $name,
+                'version'     => $data['version'] ?? '1.0.0',
+                'description' => $data['description'] ?? "{$name} module",
+                'status'      => $state && $state->enabled ? 'enabled' : 'disabled',
+            ];
+        }
+
         return $modules;
     }
 
-    protected function getLocalModuleDetails(string $name)
+    public function getModuleDetails(string $name): ?array
     {
-        $modulePath = "{$this->localPath}/{$name}";
-        $composerJson = "{$modulePath}/composer.json";
-        
-        if (!File::exists($composerJson)) {
-            throw new \Exception("Module [{$name}] not found");
+        // Try local DB states
+        $moduleState = DB::table('module_states')->where('name', $name)->first();
+        if ($moduleState) {
+            return [
+                'name'        => $moduleState->name,
+                'version'     => $moduleState->version,
+                'status'      => $moduleState->enabled ? 'enabled' : 'disabled',
+                'description' => $moduleState->description ?? '',
+            ];
         }
-        
-        $moduleData = json_decode(File::get($composerJson), true);
-        $moduleState = ModuleState::where('name', $name)->first();
-        
+
+        // If not found locally, just return null
+        return null;
+    }
+
+
+
+    protected function getLocalDetails(string $name): array
+    {
+        $composerFile = "{$this->localPath}/{$name}/composer.json";
+        if (!File::exists($composerFile)) {
+            throw new Exception("Module [{$name}] not found");
+        }
+
+        $data = json_decode(File::get($composerFile), true);
+        $state = ModuleState::where('name', $name)->first();
+
         return [
-            'name' => $name,
-            'version' => $moduleData['version'] ?? '1.0.0',
-            'description' => $moduleData['description'] ?? '',
-            'status' => $moduleState ? $moduleState->status : 'disabled',
-            'dependencies' => $moduleData['require'] ?? [],
-            'authors' => $moduleData['authors'] ?? [],
-            'license' => $moduleData['license'] ?? 'MIT',
-            'last_enabled' => $moduleState ? $moduleState->last_enabled_at : null,
-            'last_disabled' => $moduleState ? $moduleState->last_disabled_at : null,
-            'applied_migrations' => $moduleState ? $moduleState->applied_migrations : [],
-            'failed_migrations' => $moduleState ? $moduleState->failed_migrations : []
+            'name'              => $name,
+            'version'           => $data['version'] ?? '1.0.0',
+            'description'       => $data['description'] ?? '',
+            'status'            => $state?->status ?? 'disabled',
+            'dependencies'      => $data['require'] ?? [],
+            'authors'           => $data['authors'] ?? [],
+            'license'           => $data['license'] ?? 'MIT',
+            'last_enabled'      => $state?->last_enabled_at,
+            'last_disabled'     => $state?->last_disabled_at,
+            'applied_migrations'=> $state?->applied_migrations ?? [],
+            'failed_migrations' => $state?->failed_migrations ?? [],
         ];
     }
 
-    protected function sendUpdateNotifications(array $updates)
+    protected function updateState(string $name, string $status, bool $enabled): void
     {
-        $recipients = Config::get('marketplace.notifications.recipients', []);
-        
-        foreach ($recipients as $recipient) {
-            Notification::route('mail', $recipient)
-                ->notify(new ModuleUpdateAvailable($updates));
-        }
-    }
-
-    protected function installDependencies($name)
-    {
-        $composerFile = "{$this->modulePath}/{$name}/composer.json";
-        if (File::exists($composerFile)) {
-            $composer = json_decode(File::get($composerFile), true);
-            if (isset($composer['require'])) {
-                foreach ($composer['require'] as $package => $version) {
-                    if (strpos($package, 'Modules/') === 0) {
-                        $moduleName = str_replace('Modules/', '', $package);
-                        if (!$this->isModuleEnabled($moduleName)) {
-                            $this->installModule($moduleName);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    protected function publishAssets($name)
-    {
-        // Publish assets
-        Artisan::call('vendor:publish', [
-            '--tag' => ["{$name}-assets", "{$name}-config"],
-            '--force' => true
+        $state = ModuleState::firstOrCreate(['name' => $name], [
+            'version' => $this->getModuleVersion($name),
+            'status'  => $status,
         ]);
-    }
 
-    protected function unpublishAssets($name)
-    {
-        // Remove published assets
-        $publicPath = public_path("Modules/{$name}");
-        if (File::exists($publicPath)) {
-            File::deleteDirectory($publicPath);
+        $state->status = $status;
+        $state->enabled = $enabled;
+        if ($enabled) {
+            $state->last_enabled_at = now();
+        } else {
+            $state->last_disabled_at = now();
         }
-
-        // Remove published configs
-        $configPath = config_path(strtolower($name) . '.php');
-        if (File::exists($configPath)) {
-            File::delete($configPath);
-        }
+        $state->save();
     }
 
-    protected function rollbackMigrations($name)
+    protected function getModuleVersion(string $name): string
     {
-        Artisan::call('migrate:rollback', [
-            '--path' => "Modules/{$name}/src/Database/Migrations",
-            '--force' => true
-        ]);
+        $composer = "{$this->modulePath}/{$name}/composer.json";
+        return File::exists($composer)
+            ? (json_decode(File::get($composer), true)['version'] ?? '1.0.0')
+            : '1.0.0';
     }
 
-    protected function clearCaches()
+    protected function installDependencies(string $name): void
     {
-        // Clear Laravel caches
-        Artisan::call('config:clear');
-        Artisan::call('cache:clear');
-        Artisan::call('route:clear');
-        Artisan::call('view:clear');
-
-        // Clear module caches
-        $this->cacheManager->invalidateAll();
-
-        // Regenerate autoload files
-        $this->regenerateAutoload();
-    }
-
-    public function isModuleEnabled($moduleName)
-    {
-        try {
-            $moduleState = DB::table('modules')->where('name', $moduleName)->first();
-            return $moduleState && $moduleState->is_enabled;
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
-
-    protected function registerServiceProvider($name)
-    {
-        $configPath = config_path('app.php');
-        $config = file_get_contents($configPath);
-        
-        $providerClass = "Modules\\\\{$name}\\\\Providers\\\\{$name}ServiceProvider::class";
-        
-        // Check if provider already exists
-        if (!str_contains($config, $providerClass)) {
-            // Find the last module service provider
-            $lastProvider = "Modules\\\\";
-            $lines = explode("\n", $config);
-            $insertAt = null;
-            
-            foreach ($lines as $i => $line) {
-                if (str_contains($line, $lastProvider)) {
-                    $insertAt = $i;
-                }
-            }
-            
-            if ($insertAt !== null) {
-                array_splice($lines, $insertAt + 1, 0, "        {$providerClass},");
-                file_put_contents($configPath, implode("\n", $lines));
-            }
-        }
-    }
-
-    protected function removeFromConfig($name)
-    {
-        $configPath = config_path('app.php');
-        $config = file_get_contents($configPath);
-        
-        // Remove service provider with better pattern matching
-        $providerClass = preg_quote("Modules\\{$name}\\Providers\\{$name}ServiceProvider::class", '/');
-        $config = preg_replace("/^\s*{$providerClass},?\r?\n?/m", '', $config);
-        
-        file_put_contents($configPath, $config);
-    }
-
-    protected function removeFromComposer($name)
-    {
-        $composerPath = base_path('composer.json');
-        $composer = json_decode(file_get_contents($composerPath), true);
-        
-        // Remove from autoload
-        if (isset($composer['autoload']['psr-4']["Modules\\{$name}\\"])) {
-            unset($composer['autoload']['psr-4']["Modules\\{$name}\\"]);
-        }
-        
-        // Remove from require if exists
-        if (isset($composer['require']["Modules/{$name}"])) {
-            unset($composer['require']["Modules/{$name}"]);
-        }
-        
-        file_put_contents($composerPath, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-    }
-
-    protected function cleanupDatabase($name)
-    {
-        // Remove module state
-        DB::table('module_states')->where('name', $name)->delete();
-        
-        // Remove module migrations
-        $migrations = DB::table('migrations')
-            ->where('migration', 'like', "%_{$name}_%")
-            ->get();
-            
-        foreach ($migrations as $migration) {
-            DB::table('migrations')->where('id', $migration->id)->delete();
-        }
-    }
-
-    protected function regenerateAutoload()
-    {
-        shell_exec('composer dump-autoload');
-    }
-
-    protected function runMigrations($name)
-    {
-        $migrationPath = "Modules/{$name}/src/Database/Migrations";
-        $moduleState = ModuleState::firstOrCreate(
-            ['name' => $name],
-            ['version' => $this->getModuleVersion($name), 'status' => 'installed']
-        );
-
-        // Get list of migrations
-        $migrations = File::glob("{$this->modulePath}/{$name}/src/Database/Migrations/*.php");
-        $appliedMigrations = json_decode($moduleState->applied_migrations ?? '[]', true);
-        $failedMigrations = json_decode($moduleState->failed_migrations ?? '[]', true);
-
-        foreach ($migrations as $migration) {
-            $migrationName = basename($migration, '.php');
-            
-            // Skip if already applied successfully
-            if (in_array($migrationName, $appliedMigrations)) {
-                continue;
-            }
-
-            try {
-                Artisan::call('migrate', [
-                    '--path' => $migrationPath,
-                    '--force' => true
-                ]);
-
-                $appliedMigrations[] = $migrationName;
-                $failedMigrations = array_diff($failedMigrations, [$migrationName]);
-            } catch (\Exception $e) {
-                $failedMigrations[] = $migrationName;
-                throw $e;
-            }
-        }
-
-        // Update module state
-        $moduleState->applied_migrations = json_encode($appliedMigrations);
-        $moduleState->failed_migrations = json_encode($failedMigrations);
-        $moduleState->save();
-    }
-
-    protected function getModuleVersion($name)
-    {
-        $composerFile = "{$this->modulePath}/{$name}/composer.json";
-        if (File::exists($composerFile)) {
-            $composer = json_decode(File::get($composerFile), true);
-            return $composer['version'] ?? '1.0.0';
-        }
-        return '1.0.0';
-    }
-
-    public function uninstallModule($name)
-    {
-        try {
-            DB::beginTransaction();
-
-            // 1. Check if module exists
-            $modulePath = $this->modulePath . '/' . $name;
-            if (!File::exists($modulePath)) {
-                throw new \Exception("Module [{$name}] not found");
-            }
-
-            // 2. Check if module is installed
-            $moduleState = ModuleState::where('name', $name)->first();
-            if (!$moduleState || $moduleState->status !== 'installed') {
-                throw new \Exception("Module [{$name}] is not installed");
-            }
-
-            // 3. Run uninstall migrations
-            $this->runUninstallMigrations($name);
-
-            // 4. Unregister service provider
-            $this->unregisterServiceProvider($name);
-
-            // 5. Update module state
-            $moduleState->status = 'uninstalled';
-            $moduleState->save();
-
-            // 6. Clear caches
-            if ($this->cacheManager) {
-                $this->cacheManager->forget($this->getModuleCacheKey($name));
-                $this->cacheManager->forget('modules.list');
-            }
-
-            // 7. Fire event
-            Event::dispatch(new ModuleUninstalled($name));
-
-            DB::commit();
-            return true;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
-    }
-
-    /**
-     * Install a module
-     */
-    public function install(string $moduleName): bool
-    {
-        try {
-            // Register module in app.php
-            if (!$this->moduleRegistrationService->registerModule($moduleName)) {
-                throw new \Exception("Failed to register module in app.php");
-            }
-
-            // Run module migrations
-            Artisan::call('module:migrate', ['module' => $moduleName]);
-
-            // Run module seeders if they exist
-            if (File::exists(base_path("Modules/{$moduleName}/src/Database/Seeders"))) {
-                Artisan::call('module:seed', ['module' => $moduleName]);
-            }
-
-            // Clear cache
-            $this->clearCache();
-
-            return true;
-        } catch (\Exception $e) {
-            // Rollback registration if installation fails
-            $this->moduleRegistrationService->unregisterModule($moduleName);
-            throw $e;
-        }
-    }
-
-    /**
-     * Uninstall a module
-     */
-    public function uninstall(string $moduleName): bool
-    {
-        try {
-            // Unregister module from app.php
-            if (!$this->moduleRegistrationService->unregisterModule($moduleName)) {
-                throw new \Exception("Failed to unregister module from app.php");
-            }
-
-            // Run module migrations rollback
-            Artisan::call('module:migrate-rollback', ['module' => $moduleName]);
-
-            // Clear cache
-            $this->clearCache();
-
-            return true;
-        } catch (\Exception $e) {
-            throw $e;
-        }
-    }
-
-    /**
-     * Enable a module
-     */
-    public function enable(string $moduleName): bool
-    {
-        try {
-            // Register module in app.php if not already registered
-            if (!$this->moduleRegistrationService->registerModule($moduleName)) {
-                throw new \Exception("Failed to register module in app.php");
-            }
-
-            // Clear cache
-            $this->clearCache();
-
-            return true;
-        } catch (\Exception $e) {
-            throw $e;
-        }
-    }
-
-    /**
-     * Disable a module
-     */
-    public function disable(string $moduleName): bool
-    {
-        try {
-            // Unregister module from app.php
-            if (!$this->moduleRegistrationService->unregisterModule($moduleName)) {
-                throw new \Exception("Failed to unregister module from app.php");
-            }
-
-            // Clear cache
-            $this->clearCache();
-
-            return true;
-        } catch (\Exception $e) {
-            throw $e;
-        }
-    }
-
-    /**
-     * List all modules
-     */
-    public function list(): array
-    {
-        return $this->moduleRegistrationService->getRegisteredModules();
-    }
-
-    /**
-     * Clear all caches
-     */
-    protected function clearCache(): void
-    {
-        Artisan::call('cache:clear');
-        Artisan::call('config:clear');
-        Artisan::call('route:clear');
-        Artisan::call('view:clear');
-    }
-
-    public function cleanupComposerJson($moduleName)
-    {
-        $composerJsonPath = base_path('composer.json');
-        if (!File::exists($composerJsonPath)) {
+        $composer = "{$this->modulePath}/{$name}/composer.json";
+        if (!File::exists($composer)) {
             return;
         }
 
-        $composerJson = json_decode(File::get($composerJsonPath), true);
-        
-        // Remove from require section (case-insensitive)
-        if (isset($composerJson['require'])) {
-            $moduleKey = strtolower("Modules/{$moduleName}");
-            foreach ($composerJson['require'] as $key => $value) {
-                if (strtolower($key) === $moduleKey) {
-                    unset($composerJson['require'][$key]);
+        $data = json_decode(File::get($composer), true);
+        foreach ($data['require'] ?? [] as $package => $version) {
+            if (str_starts_with($package, 'Modules/')) {
+                $dep = str_replace('Modules/', '', $package);
+                if (!$this->isModuleEnabled($dep)) {
+                    $this->install($dep);
                 }
             }
         }
-
-        // Remove from autoload section (case-insensitive)
-        if (isset($composerJson['autoload']['psr-4'])) {
-            $moduleNamespace = "Modules\\{$moduleName}\\";
-            foreach ($composerJson['autoload']['psr-4'] as $namespace => $path) {
-                if (strcasecmp($namespace, $moduleNamespace) === 0) {
-                    unset($composerJson['autoload']['psr-4'][$namespace]);
-                }
-            }
-        }
-
-        // Write back to composer.json
-        File::put(
-            $composerJsonPath,
-            json_encode($composerJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-        );
-
-        // Run composer dump-autoload
-        exec('composer dump-autoload');
     }
-} 
+
+    protected function publishAssets(string $name): void
+    {
+        Artisan::call('vendor:publish', [
+            '--tag'   => ["{$name}-assets", "{$name}-config"],
+            '--force' => true,
+        ]);
+    }
+
+    protected function runMigrations(string $name): void
+    {
+        Artisan::call('migrate', [
+            '--path'  => "Modules/{$name}/src/Database/Migrations",
+            '--force' => true,
+        ]);
+    }
+
+    protected function runUninstallMigrations(string $name): void
+    {
+        Artisan::call('migrate:rollback', [
+            '--path'  => "Modules/{$name}/src/Database/Migrations",
+            '--force' => true,
+        ]);
+    }
+
+    protected function sendUpdateNotifications(array $updates): void
+    {
+        foreach (Config::get('marketplace.notifications.recipients', []) as $recipient) {
+            Notification::route('mail', $recipient)->notify(new ModuleUpdateAvailable($updates));
+        }
+    }
+
+    protected function isModuleEnabled(string $name): bool
+    {
+        $state = ModuleState::where('name', $name)->first();
+        return $state && $state->enabled;
+    }
+
+    protected function clearModuleCache(string $name): void
+    {
+        if ($this->cacheManager) {
+            $this->cacheManager->forget($this->cacheKey($name));
+            $this->cacheManager->forget('modules.list');
+        }
+    }
+
+    protected function transaction(callable $callback): bool
+    {
+        return DB::transaction(function () use ($callback) {
+            $callback();
+            return true;
+        });
+    }
+
+    protected function assertModuleExists(string $name): void
+    {
+        if (!File::exists("{$this->modulePath}/{$name}")) {
+            throw new Exception("Module [{$name}] not found");
+        }
+    }
+
+    protected function assertModuleInstalled(string $name): void
+    {
+        $state = ModuleState::where('name', $name)->first();
+        if (!$state || $state->status !== 'installed') {
+            throw new Exception("Module [{$name}] is not installed");
+        }
+    }
+
+    /**
+     * Check dependencies before installing/removing a module.
+     *
+     * @param string $name
+     * @throws Exception
+     */
+    public function checkDependencies(string $name): void
+    {
+        // Example: Check if the module exists in marketplace table/config
+        $module = DB::table('module_states')->where('name', $name)->first();
+
+        if (!$module) {
+            throw new Exception("Module [{$name}] not found in marketplace records.");
+        }
+
+        // Example: Check dependency rules (this can be extended)
+        if (!empty($module->dependencies)) {
+            $dependencies = json_decode($module->dependencies, true);
+            foreach ($dependencies as $dependency) {
+                $exists = DB::table('module_states')->where('name', $dependency)->exists();
+                if (!$exists) {
+                    throw new Exception("Dependency [{$dependency}] for module [{$name}] is missing.");
+                }
+            }
+        }
+    }
+}

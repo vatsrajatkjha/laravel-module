@@ -68,5 +68,6 @@ return array (
   array (
     0 => 'Testing',
     1 => 'TestModule',
+    2 => 'UserManagement',
   ),
 );

@@ -115,9 +115,8 @@ class ModuleMakeControllerCommand extends Command
     protected function createController($stub, $name, $module, $isResource, $isApi)
     {
         $stub = File::get(__DIR__ . '/../stubs/' . $stub);
-        $stub = str_replace('{{ module_name }}', $module, $stub);
 
-        // Extract class name (remove subdirectories)
+        // Extract class name
         $className = Str::studly(class_basename($name));
         $stub = str_replace('{{ class_name }}', $className, $stub);
 
@@ -127,7 +126,17 @@ class ModuleMakeControllerCommand extends Command
             $stub = str_replace('{{ resource_name_lower }}', Str::camel($resourceName), $stub);
         }
 
-        // Full path with nested directories
+        // Build namespace
+        $subNamespace = trim(str_replace('/', '\\', Str::beforeLast($name, '/')), '\\');
+        $namespace = "Modules\\{$module}\\Http\\Controllers";
+        if ($subNamespace !== '') {
+            $namespace .= '\\' . Str::studly($subNamespace);
+        }
+
+        $stub = str_replace('{{ module_name }}', $module, $stub);
+        $stub = str_replace('{{ namespace }}', $namespace, $stub);
+
+        // Destination path
         $controllerPath = base_path("Modules/{$module}/src/Http/Controllers/{$name}.php");
 
         // Ensure directory exists
@@ -138,5 +147,4 @@ class ModuleMakeControllerCommand extends Command
 
         File::put($controllerPath, $stub);
     }
-
-} 
+}

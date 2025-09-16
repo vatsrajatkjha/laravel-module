@@ -10,9 +10,9 @@ use RCV\Core\Services\MarketplaceService;
 
 class ModuleMarketplaceCommand extends Command
 {
-    protected $signature = 'module:marketplace 
-        {action : The action to perform (list|install|remove|update|cleanup)} 
-        {module?* : One or more module names (required for install/remove/update)} 
+    protected $signature = 'module:marketplace
+        {action : The action to perform (list|install|remove|update|cleanup)}
+        {module?* : One or more module names (required for install/remove/update)}
         {--force : Force the action}';
 
     protected $description = 'Manage modules through the marketplace';
@@ -159,8 +159,24 @@ class ModuleMarketplaceCommand extends Command
             }
 
             $this->info("Updating module [{$name}]...");
+
+            // Disable & re-enable to refresh
             $this->call('module:disable', ['module' => [$name]]);
             $this->call('module:enable', ['module' => [$name]]);
+
+            // ✅ NEW: Run composer autoload + migrations again
+            $this->runComposerDumpAutoload();
+
+            $migrationsPath = base_path("Modules/{$name}/src/Database/Migrations");
+            if (File::exists($migrationsPath)) {
+                $migrationFiles = File::glob($migrationsPath . '/*.php');
+                foreach ($migrationFiles as $file) {
+                    $migrationName = pathinfo($file, PATHINFO_FILENAME);
+                    if (!$this->migrationExists($migrationName)) {
+                        $this->runMigration($file);
+                    }
+                }
+            }
 
             $this->info("Module [{$name}] updated successfully");
             return 0;

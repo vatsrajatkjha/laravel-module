@@ -9,6 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('{{ table }}', function (Blueprint $table) {
+            // Drop the given columns
             {{ fields_up }}
         });
     }
@@ -16,6 +17,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('{{ table }}', function (Blueprint $table) {
+            // Re-add the dropped columns (in rollback)
             {{ fields_down }}
         });
     }

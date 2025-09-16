@@ -47,15 +47,51 @@ class ModuleMigrationMakeCommand extends Command
     {
         $name = $this->argument('name');
 
+        // create_*_table
         if (Str::startsWith($name, 'create_') && Str::endsWith($name, '_table')) {
             return Str::replaceFirst('create_', '', Str::replaceLast('_table', '', $name));
         }
 
+        // drop_*_table
+        if (Str::startsWith($name, 'drop_') && Str::endsWith($name, '_table')) {
+            return Str::replaceFirst('drop_', '', Str::replaceLast('_table', '', $name));
+        }
+
+        // delete_*_table
+        if (Str::startsWith($name, 'delete_') && Str::contains($name, '_from_') && Str::endsWith($name, '_table')) {
+            return Str::between($name, '_from_', '_table');
+        }
+
+
+        // add_*_to_*_table / delete_*_from_*_table
         if (preg_match('/_(?:to|from)_(.+)_table$/', $name, $matches)) {
             return $matches[1];
         }
 
         return null;
+    }
+
+    protected function getMigrationType()
+    {
+        $name = $this->argument('name');
+
+        if (Str::startsWith($name, 'create_') && Str::endsWith($name, '_table')) {
+            return 'create';
+        }
+
+        if (Str::startsWith($name, 'add_')) {
+            return 'add';
+        }
+
+        if (Str::startsWith($name, 'delete_')) {
+            return 'delete';
+        }
+
+        if (Str::startsWith($name, 'drop_')) {
+            return 'drop';
+        }
+
+        return 'plain';
     }
 
     protected function parseFields()
@@ -67,22 +103,39 @@ class ModuleMigrationMakeCommand extends Command
             return [$fieldsUp, $fieldsDown];
         }
 
+        $type = $this->getMigrationType();
+
         if ($fields = $this->option('fields')) {
             $fieldsArr = explode(',', $fields);
             foreach ($fieldsArr as $field) {
                 $parts = explode(':', $field);
                 $name = $parts[0] ?? null;
-                $type = $parts[1] ?? 'string';
+                $colType = $parts[1] ?? 'string';
 
                 if (!$name) continue;
 
-                $fieldsUp   .= "            \$table->{$type}('{$name}');\n";
-                $fieldsDown .= "            \$table->dropColumn('{$name}');\n";
+                switch ($type) {
+                    case 'add':
+                    case 'create':
+                        $fieldsUp   .= "            \$table->{$colType}('{$name}');\n";
+                        $fieldsDown .= "            \$table->dropColumn('{$name}');\n";
+                        break;
+
+                    case 'delete':
+                        $fieldsUp   .= "            \$table->dropColumn('{$name}');\n";
+                        $fieldsDown .= "            \$table->{$colType}('{$name}');\n";
+                        break;
+
+                    // for drop.stub we usually don’t need fields
+                    default:
+                        break;
+                }
             }
         }
 
         return [$fieldsUp, $fieldsDown];
     }
+
 
     protected function getTemplateContents()
     {

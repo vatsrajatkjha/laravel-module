@@ -2,65 +2,113 @@
 
 namespace RCV\Core\Services;
 
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Cache\CacheManager;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use RCV\Core\Services\MarketplaceService;
 
+/**
+ * ModuleDependencyGraph
+ *
+ * Builds a graph of modules and their inter-dependencies and provides helpers
+ * for serialization (JSON/DOT) and detecting issues (missing/disabled deps,
+ * circular dependencies).
+ */
 class ModuleDependencyGraph
 {
-    protected $modulePath;
-    protected $cacheManager;
-    protected $marketplaceService;
-    protected $cacheEnabled;
-    protected $cacheTtl;
+    protected string $modulePath;
+    protected ?CacheManager $cacheManager;
+    protected MarketplaceService $marketplaceService;
+    protected bool $cacheEnabled;
+    protected int $cacheTtl;
 
-    public function __construct(CacheManager $cacheManager, MarketplaceService $marketplaceService)
+    public function __construct(?CacheManager $cacheManager, MarketplaceService $marketplaceService)
     {
         $this->modulePath = base_path('Modules');
         $this->cacheManager = $cacheManager;
         $this->marketplaceService = $marketplaceService;
-        $this->cacheEnabled = Config::get('cache.enabled', false);
-        $this->cacheTtl = Config::get('cache.ttl', 60);
+
+        // Prefer explicit config keys for module graph caching (fallback to false)
+        $this->cacheEnabled = Config::get('modules.dependency_graph.cache_enabled', false);
+        $this->cacheTtl = (int) Config::get('modules.dependency_graph.cache_ttl', 60);
     }
 
-    public function generateGraph()
+    /**
+     * Generate the graph structure (nodes + edges). Result cached if configured.
+     *
+     * @return array{nodes: array, edges: array}
+     */
+    public function generateGraph(): array
     {
-        $cacheKey = 'module_dependency_graph';
-        
+        $cacheKey = 'modules.dependency_graph.v1';
+
         if ($this->cacheManager && $this->cacheEnabled) {
-            $graph = $this->cacheManager->get($cacheKey);
-            if ($graph) {
-                return $graph;
+            return $this->cacheManager->remember($cacheKey, $this->cacheTtl, fn() => $this->buildGraph());
+        }
+
+        return $this->buildGraph();
+    }
+
+    /**
+     * Return nodes array
+     *
+     * @return array<int,array{name:string,enabled:bool,version:string}>
+     */
+    public function getNodes(): array
+    {
+        return $this->generateGraph()['nodes'];
+    }
+
+    /**
+     * Return edges array
+     *
+     * @return array<int,array{from:string,to:string,type:string}>
+     */
+    public function getEdges(): array
+    {
+        return $this->generateGraph()['edges'];
+    }
+
+    /**
+     * Convenience to get all issues (dependency problems + circular dependencies)
+     *
+     * @return array
+     */
+    public function detectIssues(): array
+    {
+        $issues = [];
+        $issues = array_merge($issues, $this->validateDependencies());
+        $circular = $this->findCircularDependencies();
+        if (!empty($circular)) {
+            foreach ($circular as $cycle) {
+                $issues[] = 'Circular dependency detected: ' . implode(' -> ', $cycle);
             }
         }
-
-        $graph = $this->buildGraph();
-
-        if ($this->cacheManager && $this->cacheEnabled) {
-            $this->cacheManager->put($cacheKey, $graph, $this->cacheTtl);
-        }
-
-        return $graph;
+        return $issues;
     }
 
+    /**
+     * Generate DOT representation suitable for Graphviz.
+     */
     public function generateDotGraph(): string
     {
         $graph = $this->generateGraph();
         $dot = "digraph ModuleDependencies {\n";
         $dot .= "    rankdir=LR;\n";
-        $dot .= "    node [shape=box, style=filled, fillcolor=lightblue];\n\n";
+        $dot .= "    node [shape=box, style=filled, color=black];\n\n";
 
         // Add nodes
         foreach ($graph['nodes'] as $node) {
             $color = $node['enabled'] ? 'lightgreen' : 'lightpink';
-            $dot .= "    \"{$node['name']}\" [fillcolor={$color}];\n";
+            $dot .= sprintf("    \"%s\" [fillcolor=\"%s\"];\n", $node['name'], $color);
         }
 
         $dot .= "\n";
 
         // Add edges
         foreach ($graph['edges'] as $edge) {
-            $dot .= "    \"{$edge['from']}\" -> \"{$edge['to']}\";\n";
+            $dot .= sprintf("    \"%s\" -> \"%s\";\n", $edge['from'], $edge['to']);
         }
 
         $dot .= "}\n";
@@ -68,56 +116,87 @@ class ModuleDependencyGraph
         return $dot;
     }
 
+    /**
+     * JSON representation of the graph
+     */
     public function generateJsonGraph(): string
     {
         return json_encode($this->generateGraph(), JSON_PRETTY_PRINT);
     }
 
+    /**
+     * Build graph from available modules + composer requires that reference Modules/
+     *
+     * @return array{nodes: array, edges: array}
+     */
     protected function buildGraph(): array
     {
-        $graph = [
-            'nodes' => [],
-            'edges' => []
-        ];
+        $nodes = [];
+        $edges = [];
 
-        $modules = $this->marketplaceService->getAvailableModules();
+        // Attempt to get available modules from marketplace service (expects array)
+        try {
+            $modules = $this->marketplaceService->list();
+        } catch (\Throwable $e) {
+            Log::error('Failed to list modules from marketplace service: ' . $e->getMessage());
+            $modules = [];
+        }
 
-        // Add nodes
         foreach ($modules as $module) {
-            $graph['nodes'][] = [
-                'name' => $module['name'],
-                'enabled' => $module['status'] === 'enabled',
-                'version' => $module['version'] ?? '1.0.0'
+            $name = $module['name'] ?? ($module['module'] ?? null);
+            if (!$name) {
+                continue;
+            }
+
+            $nodes[] = [
+                'name' => $name,
+                'enabled' => ($module['status'] ?? 'disabled') === 'enabled',
+                'version' => $module['version'] ?? '1.0.0',
             ];
         }
 
-        // Add edges
-        foreach ($modules as $module) {
-            $dependencies = $this->getModuleDependencies($module['name']);
-            foreach ($dependencies as $dependency) {
-                $graph['edges'][] = [
-                    'from' => $module['name'],
-                    'to' => $dependency,
-                    'type' => 'requires'
+        // For edges, read composer.json for each module and pick require entries like "Modules/Other"
+        foreach ($nodes as $node) {
+            $moduleName = $node['name'];
+            $dependencies = $this->getModuleDependencies($moduleName);
+            foreach ($dependencies as $dep) {
+                $edges[] = [
+                    'from' => $moduleName,
+                    'to' => $dep,
+                    'type' => 'requires',
                 ];
             }
         }
 
-        return $graph;
+        return ['nodes' => $nodes, 'edges' => $edges];
     }
 
+    /**
+     * Read module composer.json and return module dependencies referencing Modules/...
+     *
+     * @return string[] list of module names this module requires
+     */
     protected function getModuleDependencies(string $moduleName): array
     {
         $dependencies = [];
         $composerFile = "{$this->modulePath}/{$moduleName}/composer.json";
 
-        if (File::exists($composerFile)) {
-            $composer = json_decode(File::get($composerFile), true);
-            if (isset($composer['require'])) {
-                foreach ($composer['require'] as $package => $version) {
-                    if (strpos($package, 'Modules/') === 0) {
-                        $dependencies[] = str_replace('Modules/', '', $package);
-                    }
+        if (!File::exists($composerFile)) {
+            return $dependencies;
+        }
+
+        $raw = File::get($composerFile);
+        $composer = json_decode($raw, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($composer)) {
+            Log::warning("Invalid composer.json for module {$moduleName}");
+            return $dependencies;
+        }
+
+        if (!empty($composer['require']) && is_array($composer['require'])) {
+            foreach ($composer['require'] as $package => $ver) {
+                if (is_string($package) && str_starts_with($package, 'Modules/')) {
+                    $dependencies[] = str_replace('Modules/', '', $package);
                 }
             }
         }
@@ -125,126 +204,112 @@ class ModuleDependencyGraph
         return $dependencies;
     }
 
-    public function findCircularDependencies(): array
-    {
-        $graph = $this->generateGraph();
-        $visited = [];
-        $recursionStack = [];
-        $circularDeps = [];
-
-        foreach ($graph['nodes'] as $node) {
-            if (!isset($visited[$node['name']])) {
-                $this->findCircularDependenciesDFS(
-                    $node['name'],
-                    $graph,
-                    $visited,
-                    $recursionStack,
-                    $circularDeps
-                );
-            }
-        }
-
-        return $circularDeps;
-    }
-
-    protected function findCircularDependenciesDFS(
-        string $module,
-        array $graph,
-        array &$visited,
-        array &$recursionStack,
-        array &$circularDeps
-    ): void {
-        $visited[$module] = true;
-        $recursionStack[$module] = true;
-
-        $edges = array_filter($graph['edges'], function($edge) use ($module) {
-            return $edge['from'] === $module;
-        });
-
-        foreach ($edges as $edge) {
-            $dependency = $edge['to'];
-
-            if (!isset($visited[$dependency])) {
-                $this->findCircularDependenciesDFS(
-                    $dependency,
-                    $graph,
-                    $visited,
-                    $recursionStack,
-                    $circularDeps
-                );
-            } elseif (isset($recursionStack[$dependency])) {
-                $circularDeps[] = [
-                    'modules' => array_keys($recursionStack),
-                    'cycle' => $this->extractCycle($recursionStack, $dependency)
-                ];
-            }
-        }
-
-        $recursionStack[$module] = false;
-    }
-
-    protected function extractCycle(array $recursionStack, string $start): array
-    {
-        $cycle = [];
-        $current = $start;
-
-        do {
-            $cycle[] = $current;
-            $current = array_search($current, $recursionStack);
-        } while ($current !== $start);
-
-        return $cycle;
-    }
-
-    public function getModuleDependencyTree(string $moduleName): array
-    {
-        $tree = [
-            'name' => $moduleName,
-            'dependencies' => []
-        ];
-
-        $dependencies = $this->getModuleDependencies($moduleName);
-        foreach ($dependencies as $dependency) {
-            $tree['dependencies'][] = $this->getModuleDependencyTree($dependency);
-        }
-
-        return $tree;
-    }
-
+    /**
+     * Validate dependencies: ensure required modules exist and are enabled
+     *
+     * @return array list of human-readable issues
+     */
     public function validateDependencies(): array
     {
         $issues = [];
         $graph = $this->generateGraph();
+        $nodesIndex = [];
+        foreach ($graph['nodes'] as $n) {
+            $nodesIndex[$n['name']] = $n;
+        }
 
-        foreach ($graph['nodes'] as $node) {
-            if ($node['enabled']) {
-                $dependencies = array_filter($graph['edges'], function($edge) use ($node) {
-                    return $edge['from'] === $node['name'];
-                });
+        foreach ($graph['edges'] as $edge) {
+            $from = $edge['from'];
+            $to = $edge['to'];
 
-                foreach ($dependencies as $dependency) {
-                    $depNode = array_filter($graph['nodes'], function($n) use ($dependency) {
-                        return $n['name'] === $dependency['to'];
-                    });
+            if (!isset($nodesIndex[$to])) {
+                $issues[] = "Module [{$from}] requires [{$to}] which is not installed";
+                continue;
+            }
 
-                    if (!empty($depNode)) {
-                        $depNode = reset($depNode);
-                        if (!$depNode['enabled']) {
-                            $issues[] = [
-                                'module' => $node['name'],
-                                'issue' => "Required dependency {$dependency['to']} is disabled"
-                            ];
-                        }
-                    } else {
-                        $issues[] = [
-                            'module' => $node['name'],
-                            'issue' => "Required dependency {$dependency['to']} is not installed"
-                        ];
-                    }
-                }
+            if (!$nodesIndex[$to]['enabled']) {
+                $issues[] = "Module [{$from}] requires [{$to}] which is currently disabled";
             }
         }
 
         return $issues;
     }
-} 
+
+    /**
+     * Detect circular dependencies using DFS and return array of cycles (each cycle is array of module names)
+     *
+     * @return array<int,array<int,string>>
+     */
+    public function findCircularDependencies(): array
+    {
+        $graph = $this->generateGraph();
+        $adj = [];
+
+        foreach ($graph['nodes'] as $n) {
+            $adj[$n['name']] = [];
+        }
+        foreach ($graph['edges'] as $e) {
+            $adj[$e['from']][] = $e['to'];
+        }
+
+        $visited = [];
+        $stack = [];
+        $cycles = [];
+
+        foreach (array_keys($adj) as $node) {
+            if (!isset($visited[$node])) {
+                $this->dfsDetectCycles($node, $adj, $visited, $stack, $cycles);
+            }
+        }
+
+        return $cycles;
+    }
+
+    /**
+     * DFS helper to detect cycles. Maintains a path stack of nodes currently in recursion.
+     */
+    protected function dfsDetectCycles(string $node, array $adj, array &$visited, array &$stack, array &$cycles): void
+    {
+        $visited[$node] = true;
+        $stack[$node] = true;
+
+        foreach ($adj[$node] ?? [] as $neighbor) {
+            if (!isset($visited[$neighbor])) {
+                $this->dfsDetectCycles($neighbor, $adj, $visited, $stack, $cycles);
+            } elseif (isset($stack[$neighbor]) && $stack[$neighbor] === true) {
+                // Found a back-edge to neighbor which is in the current recursion stack -> build cycle
+                $cycle = $this->extractCycleFromStack($stack, $neighbor);
+                if ($cycle && !in_array($cycle, $cycles, true)) {
+                    $cycles[] = $cycle;
+                }
+            }
+        }
+
+        // remove from current recursion stack
+        $stack[$node] = false;
+    }
+
+    /**
+     * Extract cycle starting at $start using keys in $stack where value === true
+     *
+     * @param array<string,bool> $stack
+     * @param string $start
+     * @return string[] the cycle nodes in order
+     */
+    protected function extractCycleFromStack(array $stack, string $start): array
+    {
+        // Keep only nodes that are currently true in stack in insertion order
+        $active = array_keys(array_filter($stack, fn($v) => $v === true));
+
+        $startIndex = array_search($start, $active, true);
+        if ($startIndex === false) {
+            return [];
+        }
+
+        // slice from startIndex to end, and append start to show cycle closure
+        $cycle = array_slice($active, $startIndex);
+        $cycle[] = $start;
+
+        return $cycle;
+    }
+}

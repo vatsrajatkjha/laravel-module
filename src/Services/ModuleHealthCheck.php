@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use RCV\Core\Models\ModuleState;
 use RCV\Core\Services\MarketplaceService;
 
@@ -13,11 +14,13 @@ class ModuleHealthCheck
 {
     protected $marketplaceService;
     protected $modulePath;
+    protected CacheRepository $cacheManager;
 
-    public function __construct(MarketplaceService $marketplaceService)
+    public function __construct(MarketplaceService $marketplaceService, CacheRepository $cacheManager)
     {
         $this->marketplaceService = $marketplaceService;
-        $this->modulePath = base_path('modules');
+        $this->cacheManager = $cacheManager;
+        $this->modulePath = base_path('Modules');
     }
 
     public function check()
@@ -33,7 +36,7 @@ class ModuleHealthCheck
         return $results;
     }
 
-    public function checkModuleHealth(string $moduleName): array 
+    public function checkModuleHealth(string $moduleName): array
     {
         $health = [
             'name' => $moduleName,
@@ -128,10 +131,10 @@ class ModuleHealthCheck
             }
 
             // Check if migrations are in sync
-            $appliedMigrations = is_array($moduleState->applied_migrations) 
-                ? $moduleState->applied_migrations 
+            $appliedMigrations = is_array($moduleState->applied_migrations)
+                ? $moduleState->applied_migrations
                 : json_decode($moduleState->applied_migrations ?? '[]', true);
-            
+
             $failedMigrations = is_array($moduleState->failed_migrations)
                 ? $moduleState->failed_migrations
                 : json_decode($moduleState->failed_migrations ?? '[]', true);
@@ -162,7 +165,7 @@ class ModuleHealthCheck
         ];
 
         $providerClass = "Modules\\{$moduleName}\\Providers\\{$moduleName}ServiceProvider";
-        
+
         if (!class_exists($providerClass)) {
             $result['status'] = 'error';
             $result['message'] = 'Service provider class not found';
@@ -187,7 +190,7 @@ class ModuleHealthCheck
         ];
 
         $migrationPath = "{$this->modulePath}/{$moduleName}/src/Database/Migrations";
-        
+
         if (!File::exists($migrationPath)) {
             $result['status'] = 'warning';
             $result['message'] = 'No migrations directory found';
@@ -304,7 +307,7 @@ class ModuleHealthCheck
         ];
 
         $routeFile = "{$this->modulePath}/{$moduleName}/src/Routes/web.php";
-        
+
         if (!File::exists($routeFile)) {
             $result['status'] = 'warning';
             $result['message'] = 'No routes file found';
@@ -334,7 +337,7 @@ class ModuleHealthCheck
         ];
 
         $viewPath = "{$this->modulePath}/{$moduleName}/resources/views";
-        
+
         if (!File::exists($viewPath)) {
             $result['status'] = 'warning';
             $result['message'] = 'No views directory found';
@@ -344,10 +347,10 @@ class ModuleHealthCheck
         // Check if views are registered
         $viewFinder = app('view.finder');
         $paths = $viewFinder->getPaths();
-        
+
         $moduleViewPath = strtolower($moduleName);
         $found = false;
-        
+
         foreach ($paths as $path) {
             if (strpos($path, $moduleViewPath) !== false) {
                 $found = true;
@@ -372,7 +375,7 @@ class ModuleHealthCheck
         ];
 
         $configFile = "{$this->modulePath}/{$moduleName}/src/Config/config.php";
-        
+
         if (!File::exists($configFile)) {
             $result['status'] = 'warning';
             $result['message'] = 'No config file found';
@@ -404,4 +407,4 @@ class ModuleHealthCheck
             Log::info($logMessage, $context);
         }
     }
-} 
+}

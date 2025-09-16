@@ -7,28 +7,62 @@ use RCV\Core\Services\ModuleDependencyGraph;
 
 class ModuleAnalyzeCommand extends Command
 {
-    protected $signature = 'module:analyze {--format=table}';
+    protected $signature = 'module:analyze {--format=table : table|json|dot}';
     protected $description = 'Analyze module dependencies and detect conflicts/cycles';
 
     public function handle(): int
     {
-        $graph = app(ModuleDependencyGraph::class);
-        $nodes = $graph->getNodes();
-        $edges = $graph->getEdges();
-        $issues = $graph->detectIssues();
+        try {
+            /** @var ModuleDependencyGraph $graph */
+            $graph = app(ModuleDependencyGraph::class);
 
-        $this->info('Modules: '.count($nodes).' | Relations: '.count($edges));
+            $format = strtolower($this->option('format') ?? 'table');
 
-        if ($issues) {
-            $this->warn('Issues detected:');
-            foreach ($issues as $issue) {
-                $this->line('- '.$issue);
+            switch ($format) {
+                case 'json':
+                    $this->line($graph->generateJsonGraph());
+                    break;
+
+                case 'dot':
+                    $this->line($graph->generateDotGraph());
+                    break;
+
+                case 'table':
+                default:
+                    $nodes = $graph->getNodes();
+                    $edges = $graph->getEdges();
+                    $issues = $graph->detectIssues();
+
+                    $this->info(sprintf('Modules: %d | Relations: %d', count($nodes), count($edges)));
+
+                    if (!empty($issues)) {
+                        $this->warn('Issues detected:');
+                        foreach ($issues as $issue) {
+                            $this->line('- ' . $issue);
+                        }
+                    } else {
+                        $this->info('No issues detected.');
+                    }
+
+                    // Show nodes table if any
+                    if (!empty($nodes)) {
+                        $rows = array_map(function ($n) {
+                            return [
+                                'Module'  => $n['name'],
+                                'Enabled' => $n['enabled'] ? 'yes' : 'no',
+                                'Version' => $n['version'] ?? '1.0.0',
+                            ];
+                        }, $nodes);
+
+                        $this->table(['Module', 'Enabled', 'Version'], $rows);
+                    }
+                    break;
             }
-        } else {
-            $this->info('No issues detected.');
+
+            return self::SUCCESS;
+        } catch (\Throwable $e) {
+            $this->error('Failed to analyze modules: ' . $e->getMessage());
+            return self::FAILURE;
         }
-        return self::SUCCESS;
     }
 }
-
-

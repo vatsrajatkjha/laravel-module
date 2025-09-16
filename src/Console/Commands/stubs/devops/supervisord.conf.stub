@@ -1,0 +1,26 @@
+[supervisord]
+nodaemon=true
+
+[program:php-fpm]
+command=/usr/local/sbin/php-fpm -F
+autostart=true
+autorestart=true
+
+[program:nginx]
+command=nginx -g "daemon off;"
+autostart=true
+autorestart=true
+
+[program:laravel-worker]
+command=php /var/www/html/artisan queue:work --sleep=3 --tries=3 --timeout=90
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/supervisor/worker.log
+stderr_logfile=/var/log/supervisor/worker_error.log
+
+[program:laravel-scheduler]
+command=php /var/www/html/artisan schedule:work
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/supervisor/scheduler.log
+stderr_logfile=/var/log/supervisor/scheduler_error.log

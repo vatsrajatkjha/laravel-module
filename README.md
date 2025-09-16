@@ -264,9 +264,34 @@ class UserRepository extends BaseRepository implements UserRepositoryInterface
 }
 ```
 
+
+## 🛠 DevOps Assets Publisher
+
+The package includes a built-in command to **bootstrap Docker and DevOps configuration files** for your Laravel modules.  
+This helps developers and teams quickly spin up containerized environments with **Docker, Nginx, Supervisord, and PHP customizations**.  
+
+---
+
+### 📌 Command
+
+```bash
+php artisan module:devops:publish
+
+```
+## 🎯 Why This Is Useful?
+
+Quick Setup → No need to manually create Docker and K8s configs.
+
+Consistency → Standardized setup across all environments (local, staging, production).
+
+Extensible → Published stubs can be customized per project needs.
+
+CI/CD Ready → Prepares the foundation for GitHub Actions or other pipelines.
+
 ### 🛠️ Service Layer
 
 ```php
+
 <?php
 
 namespace Modules\UserManagement\Services;
@@ -321,13 +346,45 @@ php artisan module:enable {name}                  # Enable specific module
 php artisan module:disable {name}                 # Disable specific module
 
 # 📋 Module Information
-php artisan module:list                           # List all modules with status
-php artisan module:show                           # Show detailed module information
+php artisan module:marketplace list               # List all modules with status
+
+### `module:analyze`
+
+Analyze module dependencies, detect issues, and optionally export in different formats.
+
+**Usage:**
+
+```bash
+php artisan module:analyze [--format=table|json|dot]
+
+# Default analysis in table format
+php artisan module:analyze
+
+# Export to JSON
+php artisan module:analyze --format=json > graph.json
+
+# Generate a dependency graph image (requires Graphviz)
+php artisan module:analyze --format=dot > graph.dot
+dot -Tpng graph.dot -o graph.png
+
+### Output (table format):
+Modules: 5 | Relations: 4
+Issues detected:
+- Module [Blog] requires [UserManagement] which is disabled
+
++------------------+---------+---------+
+| Module           | Enabled | Version |
++------------------+---------+---------+
+| Blog             | yes     | 1.0.0   |
+| UserManagement   | no      | 1.2.1   |
+| Analytics        | yes     | 0.9.0   |
++------------------+---------+---------+
+
 
 # 🗂️ Module Lifecycle
-php artisan module:install {name}                 # Install module dependencies
-php artisan module:remove {name}               # Uninstall module
-php artisan module:update {name}                  # Update module
+php artisan module:marketplace install {name}     # Install module dependencies
+php artisan module:marketplace remove {name}      # Uninstall module
+php artisan module:marketplace update {name}      # Update module
 php artisan module:publish {name}                 # Publish module assets
 ```
 
@@ -336,12 +393,32 @@ php artisan module:publish {name}                 # Publish module assets
 ```bash
 # 🎮 Controllers
 php artisan module:make-controller {name} {module}       # Create controller
-php artisan module:make-controller {name} {module} --api # Create API controller
 php artisan module:make-controller {name} {module} --resource # Create resource controller
 
 # 🗃️ Models & Database
 php artisan module:make-model {name} {module}            # Create model
+
 php artisan module:make-migration {name} {module}        # Create migration
+
+#e.g - 
+
+# Create a clients table in UserManagement with custom fields
+php artisan module:make-migration create_clients_table UserManagement
+
+# Create a clients table in UserManagement with custom fields
+php artisan module:make-migration create_clients_table UserManagement --fields="name:string,email:string,phone:string"
+
+# Add a column (e.g. status) to clients table
+php artisan module:make-migration add_status_to_clients_table UserManagement --fields="status:string"
+
+# Delete a column (e.g. phone) from clients table
+php artisan module:make-migration delete_phone_from_clients_table UserManagement --fields="phone:string"
+
+# Drop the clients table
+php artisan module:make-migration drop_clients_table UserManagement
+
+
+
 php artisan module:make-seeder {name} {module}           # Create seeder
 php artisan module:make-factory {name} {module}          # Create factory
 
@@ -376,6 +453,11 @@ php artisan module:migrate {name}                        # Run module migrations
 php artisan module:migrate-rollback {name}               # Rollback module migrations
 php artisan module:seed {name}                           # Run module seeders
 php artisan module:route-list {name}                     # List module routes
+
+### Module Profiler
+
+php artisan module:profile --duration=5                  # Run a simple module profiling command to test the metrics system:
+
 
 ```
 
