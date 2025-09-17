@@ -2,12 +2,17 @@
 
 namespace RCV\Core\Events;
 
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
+
 class ModuleEnabled
 {
-    public $moduleName;
+    use Dispatchable, SerializesModels;
 
-    public function __construct($moduleName)
+    public string $name;
+
+    public function __construct(string $name)
     {
-        $this->moduleName = $moduleName;
+        $this->name = $name;
     }
-} 
+}

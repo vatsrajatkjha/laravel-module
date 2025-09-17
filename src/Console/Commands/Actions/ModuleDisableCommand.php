@@ -5,180 +5,380 @@ namespace RCV\Core\Console\Commands\Actions;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class ModuleDisableCommand extends Command
 {
-    protected $signature = 'module:disable 
-        {module* : Module name(s)} 
-        {--force : Force disable even if there are dependencies} 
-        {--remove : Remove the module completely}';
+    /**
+     * NOTE:
+     * - By default this command is NON-DESTRUCTIVE: it marks modules disabled but DOES NOT rollback migrations or delete files.
+     * - Destructive actions (rollback / remove) must be explicitly requested via flags.
+     */
+    protected $signature = 'module:disable
+                            {module* : Module name(s)}
+                            {--force : Force disable even if other modules depend on it}
+                            {--remove : Remove module files and registration (destructive)}
+                            {--rollback : Rollback module migrations (destructive)}
+                            {--dry-run : Show actions without making changes}
+                            {--no-autoload : Do not run composer dump-autoload after operation}';
 
-    protected $description = 'Disable one or more modules';
+    protected $description = 'Disable one or more modules (non-destructive by default). Use --rollback or --remove to perform destructive cleanup.';
 
-    public function handle()
+    public function handle(): int
     {
-        $names = $this->argument('module');
+        $modules = $this->argument('module');
         $force = $this->option('force');
         $remove = $this->option('remove');
+        $rollback = $this->option('rollback');
+        $dryRun = $this->option('dry-run');
+        $noAutoload = $this->option('no-autoload');
 
-        $anyFailed = false;
+        $summary = [
+            'processed' => [],
+            'disabled' => [],
+            'skipped' => [],
+            'removed' => [],
+            'rolled_back' => [],
+            'errors' => [],
+        ];
 
-        foreach ($names as $name) {
-            $this->info("Disabling module [{$name}]...");
+        foreach ($modules as $name) {
+            $name = trim($name);
+            $this->info("Processing module: {$name}");
+
             $modulePath = base_path("Modules/{$name}");
 
+            if (! File::exists($modulePath)) {
+                $msg = "Module [{$name}] not found in Modules directory.";
+                $this->error($msg);
+                $summary['errors'][] = $msg;
+                $summary['skipped'][] = $name;
+                continue;
+            }
+
+            $moduleState = DB::table('module_states')->where('name', $name)->first();
+            if (! $moduleState) {
+                $this->warn("Module [{$name}] is not registered in module_states. Creating disabled entry (dry-run will not persist).");
+            }
+
+            // Check dependencies unless forced
+            if (! $force) {
+                $dependentModules = $this->findDependentModules($name);
+                if (! empty($dependentModules)) {
+                    $this->error("Cannot disable [{$name}] because it is required by: " . implode(', ', $dependentModules));
+                    $this->comment("Use --force to override and proceed anyway.");
+                    $summary['skipped'][] = $name;
+                    continue;
+                }
+            } else {
+                $this->comment("--force provided: skipping dependency checks for {$name}.");
+            }
+
+            // If remove is requested, confirm unless force is provided
+            if ($remove && ! $force && ! $dryRun) {
+                if (! $this->confirm("You requested --remove which will delete module files and DB state for [{$name}]. Are you sure?")) {
+                    $this->warn("Skipping remove for {$name} by user decision.");
+                    $remove = false; // treat as not removing for this module
+                }
+            }
+
+            // Prepare actions to be performed
+            $actions = [
+                'disable' => true,
+                'rollback' => $rollback,
+                'remove' => $remove,
+            ];
+
+            $this->line("Actions for {$name}: " . implode(', ', array_keys(array_filter($actions))) );
+
+            // Dry-run: just show what would happen
+            if ($dryRun) {
+                $this->info("[dry-run] Would perform actions for {$name}: " . json_encode($actions));
+                $summary['processed'][] = $name;
+                continue;
+            }
+
+            // Execute within DB transaction: mark disabled first
             try {
-                if (!File::exists($modulePath)) {
-                    $this->error("Module [{$name}] not found in modules directory");
-                    $anyFailed = true;
-                    continue;
-                }
+                DB::beginTransaction();
 
-                $moduleState = DB::table('module_states')->where('name', $name)->first();
-                if (!$moduleState) {
-                    $this->error("Module [{$name}] is not registered");
-                    $anyFailed = true;
-                    continue;
-                }
-
-                if (!$force) {
-                    $dependentModules = $this->checkDependencies($name);
-                    if (!empty($dependentModules)) {
-                        $this->error("Cannot disable [{$name}]; required by: " . implode(', ', $dependentModules));
-                        $this->info("Use --force to disable anyway");
-                        $anyFailed = true;
-                        continue;
-                    }
-                }
-
-                DB::table('module_states')->where('name', $name)->update([
-                    'enabled' => false,
-                    'status' => 'disabled',
-                    'last_disabled_at' => now(),
-                    'updated_at' => now(),
-                ]);
-
-                $this->updateModuleJsonState($name);
-
-                if (File::exists("{$modulePath}/src/Database/Migrations")) {
-                    $this->info("Rolling back migrations for [{$name}]...");
-
-                    $appliedMigrations = json_decode($moduleState->applied_migrations ?? '[]', true);
-                    $failedMigrations = json_decode($moduleState->failed_migrations ?? '[]', true);
-
-                    $migrations = array_reverse($appliedMigrations);
-                    $rolledBack = [];
-                    $failedRollbacks = [];
-
-                    foreach ($migrations as $migration) {
-                        try {
-                            $this->call('migrate:rollback', [
-                                '--path' => "Modules/{$name}/src/Database/Migrations/{$migration}"
-                            ]);
-                            $rolledBack[] = $migration;
-                        } catch (\Exception $e) {
-                            if (!$force) throw $e;
-
-                            $failedRollbacks[] = $migration;
-                            $this->warn("Rollback failed but continuing (--force): {$migration}");
-                        }
-                    }
-
-                    DB::table('module_states')->where('name', $name)->update([
+                // Create module_state row if missing
+                if (! $moduleState) {
+                    DB::table('module_states')->insert([
+                        'name' => $name,
+                        'version' => $this->readModuleVersion($name),
+                        'description' => $this->readModuleDescription($name),
+                        'enabled' => false,
                         'status' => 'disabled',
-                        'applied_migrations' => json_encode(array_diff($appliedMigrations, $rolledBack)),
-                        'failed_migrations' => json_encode(array_merge($failedMigrations, $failedRollbacks)),
-                        'last_disabled_at' => now()
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    $moduleState = DB::table('module_states')->where('name', $name)->first();
+                } else {
+                    DB::table('module_states')->where('name', $name)->update([
+                        'enabled' => false,
+                        'status' => 'disabled',
+                        'last_disabled_at' => now(),
+                        'updated_at' => now(),
                     ]);
                 }
 
-                if ($remove) {
-                    $this->info("Removing module [{$name}]...");
-                    $this->removeFromModulesConfig($name);
+                // Update module.json if present
+                $this->updateModuleJsonState($name, false);
 
-                    if (File::exists($modulePath)) {
-                        File::deleteDirectory($modulePath);
-                    }
-
-                    DB::table('module_states')->where('name', $name)->delete();
-                    $this->removeFromComposer($name);
-
-                    $this->info("Module [{$name}] removed completely.");
-                } else {
-                    $this->info("Module [{$name}] disabled.");
-                }
-            } catch (\Exception $e) {
-                $this->error("Error disabling module [{$name}]: " . $e->getMessage());
-                $anyFailed = true;
+                DB::commit();
+                $summary['disabled'][] = $name;
+                $this->info("Module [{$name}] marked disabled.");
+                // event AFTER successful disable
+                event(new \RCV\Core\Events\ModuleDisabled($name));
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                $this->error("Failed to mark module {$name} disabled: " . $e->getMessage());
+                Log::error("ModuleDisableCommand: failed to update state for {$name}", ['exception' => $e]);
+                $summary['errors'][] = "Failed to mark disabled: {$name}: {$e->getMessage()}";
+                continue;
             }
+
+            // Rollback migrations only when requested
+            if ($rollback) {
+                try {
+                    $rolled = $this->rollbackModuleMigrations($name, $force);
+                    $summary['rolled_back'][$name] = $rolled;
+                    $this->info("Rollback complete for {$name}: " . count($rolled) . " migration(s) rolled back.");
+                } catch (\Throwable $e) {
+                    $this->error("Rollback failed for {$name}: " . $e->getMessage());
+                    Log::error("ModuleDisableCommand rollback failed", ['module' => $name, 'exception' => $e]);
+                    $summary['errors'][] = "Rollback failed: {$name}: {$e->getMessage()}";
+                }
+            }
+
+            // Remove module files/state only when requested
+            if ($remove) {
+                try {
+                    $this->removeModuleFilesAndState($name);
+                    $summary['removed'][] = $name;
+                    $this->info("Module [{$name}] removed successfully.");
+                } catch (\Throwable $e) {
+                    $this->error("Failed to remove module [{$name}]: " . $e->getMessage());
+                    Log::error("ModuleDisableCommand remove failed", ['module' => $name, 'exception' => $e]);
+                    $summary['errors'][] = "Remove failed: {$name}: {$e->getMessage()}";
+                }
+            }
+
+            $summary['processed'][] = $name;
+        } // end foreach modules
+
+        // Composer autoload unless explicitly disabled or if nothing destructive happened
+        if (! $noAutoload && ! $dryRun) {
+            $this->info('Refreshing Composer autoload files...');
+            exec('composer dump-autoload -o', $outputLines, $exitCode);
+            if ($exitCode !== 0) {
+                $this->warn('composer dump-autoload returned non-zero exit code.');
+            }
+        } else {
+            $this->comment('Skipping composer dump-autoload (--no-autoload or dry-run).');
         }
 
-        $this->info('Running composer dump-autoload...');
-        exec('composer dump-autoload');
+        // Summary report
+        $this->newLine();
+        $this->info('=== Module Disable Summary ===');
+        $this->line('Processed: ' . implode(', ', $summary['processed'] ?: ['<none>']));
+        $this->line('Disabled: ' . implode(', ', $summary['disabled'] ?: ['<none>']));
+        $this->line('Removed: ' . implode(', ', $summary['removed'] ?: ['<none>']));
+        $this->line('Rolled back: ' . implode(', ', array_keys($summary['rolled_back'] ?: []) ?: ['<none>']));
+        if (! empty($summary['errors'])) {
+            $this->warn('Errors:');
+            foreach ($summary['errors'] as $err) {
+                $this->line(' - ' . $err);
+            }
+        } else {
+            $this->info('No errors reported.');
+        }
+        $this->newLine();
 
-        return $anyFailed ? 1 : 0;
+        return empty($summary['errors']) ? 0 : 1;
     }
 
-    protected function checkDependencies($name)
+    /**
+     * Find modules that depend on the given module (checks composer.json require entries starting with "Modules/").
+     *
+     * @param string $name
+     * @return array
+     */
+    protected function findDependentModules(string $name): array
     {
-        $dependentModules = [];
+        $dependent = [];
         $modules = File::directories(base_path('Modules'));
 
         foreach ($modules as $path) {
             $composerJson = "{$path}/composer.json";
-            if (File::exists($composerJson)) {
-                $config = json_decode(File::get($composerJson), true);
-                if (isset($config['require']["Modules/" . strtolower($name)])) {
-                    $dependentModules[] = basename($path);
+            if (! File::exists($composerJson)) {
+                continue;
+            }
+
+            $data = json_decode(File::get($composerJson), true);
+            if (! is_array($data)) {
+                continue;
+            }
+
+            // Normalise package key
+            $lower = strtolower($name);
+            foreach ($data['require'] ?? [] as $pkg => $version) {
+                if (Str::startsWith($pkg, 'Modules/')) {
+                    $dep = Str::after($pkg, 'Modules/');
+                    if (strtolower($dep) === $lower) {
+                        $dependent[] = basename($path);
+                    }
                 }
             }
         }
 
-        return $dependentModules;
+        return array_values(array_unique($dependent));
     }
 
-    protected function removeFromModulesConfig($name)
+    /**
+     * Read human-friendly module version from module composer.json (graceful fallback).
+     */
+    protected function readModuleVersion(string $name): string
     {
-        $configPath = base_path('Modules/Core/src/Config/modules.php');
-        if (!File::exists($configPath)) return;
-
-        $config = require $configPath;
-        if (!isset($config['modules'])) return;
-
-        $provider = "Modules\\{$name}\\Providers\\{$name}ServiceProvider::class";
-        $config['modules'] = array_filter($config['modules'], fn($p) => $p !== $provider);
-
-        $content = "<?php\n\nreturn " . var_export($config, true) . ";\n";
-        File::put($configPath, $content);
+        $composer = base_path("Modules/{$name}/composer.json");
+        if (! File::exists($composer)) return '1.0.0';
+        $data = json_decode(File::get($composer), true);
+        return $data['version'] ?? '1.0.0';
     }
 
-    protected function removeFromComposer($name)
+    /**
+     * Read module description or fallback to name.
+     */
+    protected function readModuleDescription(string $name): string
     {
-        $composerPath = base_path('composer.json');
-        if (!File::exists($composerPath)) return;
+        $composer = base_path("Modules/{$name}/composer.json");
+        if (! File::exists($composer)) return "{$name} module";
+        $data = json_decode(File::get($composer), true);
+        return $data['description'] ?? "{$name} module";
+    }
 
-        $composer = json_decode(File::get($composerPath), true);
-
-        unset($composer['autoload']['psr-4']["Modules\\{$name}\\"]);
-
-        if (isset($composer['repositories'])) {
-            $composer['repositories'] = array_filter($composer['repositories'], fn($repo) =>
-                !isset($repo['url']) || $repo['url'] !== "Modules/{$name}"
-            );
+    /**
+     * Rollback migrations for the given module.
+     *
+     * CAUTION: destructive. This method only runs when user explicitly asks (--rollback).
+     *
+     * @param string $name
+     * @param bool $force
+     * @return array List of rolled-back migration filenames
+     */
+    protected function rollbackModuleMigrations(string $name, bool $force = false): array
+    {
+        $rolledBack = [];
+        $modulePath = base_path("Modules/{$name}/src/Database/Migrations");
+        if (! File::exists($modulePath)) {
+            $this->comment("No migrations directory for {$name} (skipping rollback).");
+            return $rolledBack;
         }
 
-        File::put($composerPath, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        // Attempt to read applied migrations from module_states where recorded
+        $state = DB::table('module_states')->where('name', $name)->first();
+        $applied = [];
+        if ($state && ! empty($state->applied_migrations)) {
+            $applied = is_array($state->applied_migrations) ? $state->applied_migrations : json_decode($state->applied_migrations, true);
+        }
+
+        // If we have applied migration filenames, rollback in reverse order
+        if (! empty($applied)) {
+            $applied = array_reverse($applied);
+            foreach ($applied as $m) {
+                try {
+                    $this->call('migrate:rollback', [
+                        '--path' => "Modules/{$name}/src/Database/Migrations/{$m}",
+                        '--force' => true,
+                    ]);
+                    $rolledBack[] = $m;
+                } catch (\Throwable $e) {
+                    if (! $force) {
+                        throw $e;
+                    }
+                    $this->warn("Rollback failed for {$m} but continuing due to --force: {$e->getMessage()}");
+                }
+            }
+
+            // update module_states applied/failed migrations
+            DB::table('module_states')->where('name', $name)->update([
+                'applied_migrations' => json_encode(array_values(array_diff($state->applied_migrations ?? [], $rolledBack))),
+            ]);
+        } else {
+            // If we don't have module states, attempt a single migrate:rollback on the module path
+            $this->call('migrate:rollback', [
+                '--path' => "Modules/{$name}/src/Database/Migrations",
+                '--force' => true,
+            ]);
+            // no reliable list of rolled back migrations in this branch
+            $rolledBack[] = 'migrate:rollback on path';
+        }
+
+        return $rolledBack;
     }
 
-    protected function updateModuleJsonState($name)
+    /**
+     * Remove module files and DB state.
+     *
+     * @param string $name
+     * @return void
+     */
+    protected function removeModuleFilesAndState(string $name): void
+    {
+        // Remove provider registration from Modules/Core/src/Config/modules.php if present
+        $configPath = base_path('Modules/Core/src/Config/modules.php');
+        if (File::exists($configPath)) {
+            $config = require $configPath;
+            if (isset($config['modules']) && is_array($config['modules'])) {
+                $providerClass = "Modules\\{$name}\\Providers\\{$name}ServiceProvider::class";
+                $config['modules'] = array_values(array_filter($config['modules'], fn($p) => $p !== $providerClass));
+                File::put($configPath, "<?php\n\nreturn " . var_export($config, true) . ";\n");
+            }
+        }
+
+        // Remove composer json autoload entry and repository reference
+        $composerPath = base_path('composer.json');
+        if (File::exists($composerPath)) {
+            $composer = json_decode(File::get($composerPath), true);
+            if (isset($composer['autoload']['psr-4']["Modules\\{$name}\\"])) {
+                unset($composer['autoload']['psr-4']["Modules\\{$name}\\"]);
+            }
+
+            if (isset($composer['repositories'])) {
+                $composer['repositories'] = array_values(array_filter($composer['repositories'], fn($repo) => ! (isset($repo['url']) && $repo['url'] === "Modules/{$name}")));
+            }
+
+            File::put($composerPath, json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        }
+
+        // Delete module directory
+        $modulePath = base_path("Modules/{$name}");
+        if (File::exists($modulePath)) {
+            File::deleteDirectory($modulePath);
+        }
+
+        // Remove DB state
+        DB::table('module_states')->where('name', $name)->delete();
+    }
+
+    /**
+     * Update module.json 'enabled' flag if module.json exists
+     *
+     * @param string $name
+     * @param bool $enabled
+     */
+    protected function updateModuleJsonState(string $name, bool $enabled = false): void
     {
         $path = base_path("Modules/{$name}/module.json");
-        if (!File::exists($path)) return;
+        if (! File::exists($path)) {
+            return;
+        }
 
         $json = json_decode(File::get($path), true);
-        $json['enabled'] = false;
-        $json['last_enabled_at'] = now()->toIso8601String();
-
-        File::put($path, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $json['enabled'] = $enabled;
+        $json['last_disabled_at'] = now()->toIso8601String();
+        File::put($path, json_encode($json, JSON_PRETTY_PRINT));
     }
 }

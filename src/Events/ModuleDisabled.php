@@ -2,12 +2,20 @@
 
 namespace RCV\Core\Events;
 
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
+
 class ModuleDisabled
 {
-    public $moduleName;
+    use Dispatchable, SerializesModels;
 
-    public function __construct($moduleName)
+    public string $name;
+
+    public bool $removed;
+
+    public function __construct(string $name, bool $removed = false)
     {
-        $this->moduleName = $moduleName;
+        $this->name = $name;
+        $this->removed = $removed;
     }
-} 
+}

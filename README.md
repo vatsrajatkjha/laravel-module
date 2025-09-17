@@ -461,16 +461,17 @@ php artisan module:profile --duration=5                  # Run a simple module p
 
 ```
 
+
 ### 🛠️ Available Commands
 
 #### Module Management
 - `module:make` - Create a new module
 - `module:enable` - Enable a module
 - `module:disable` - Disable a module
-- `module:list` - List all modules
-- `module:install` - Install a module
-- `module:remove` - Uninstall a module
-- `module:update` - Update a module
+- `module:marketplace list` - List all modules
+- `module:marketplace install` - Install a module
+- `module:marketplace remove` - Uninstall a module
+- `module:marketplace update` - Update a module
 - `module:state` - Check module state
 - `module:debug` - Debug module information
 - `module:dependency-graph` - Generate module dependency graph
@@ -514,6 +515,69 @@ php artisan module:profile --duration=5                  # Run a simple module p
 - `module:make-component` - Create a new component
 - `module:make-notification` - Create a new notification
 - `module:make-observer` - Create a new observer
+
+### 🔤 Module Translation Check Command
+
+The `module:lang` command validates **translation files and keys** across multiple locales inside a module.  
+It ensures consistency and helps catch missing translations before production.
+
+#### Usage
+
+```bash
+# Basic usage
+php artisan module:lang UserManagement
+
+# Fill missing keys with placeholder
+php artisan module:lang UserManagement --placeholder="__MISSING__"
+
+# Copy missing keys from fallback locale
+php artisan module:lang UserManagement --fallback=en
+
+```
+### 🧭 `module:commands`
+
+A **user-friendly interactive explorer** for all available module commands.  
+Instead of memorizing command names, you can navigate through categories and sub-categories with a simple numeric selection.
+
+
+#### ✅ Usage
+
+```bash
+
+php artisan module:commands
+
+```
+
+### 🔧 `module:disable`
+
+Disable one or more modules in a **safe, production-ready way**.  
+
+By default this command **only disables** the module (marks it inactive in `module_states` and `module.json`) without touching database tables or deleting files.  
+Destructive actions (rollback migrations, remove module files) require explicit flags.
+
+---
+
+
+
+### ✅ Usage
+
+```bash
+php artisan module:disable {module*} [options]
+
+```
+⚙️ Options
+Option	        Description
+
+--force	        Force disable even if other modules depend on this one. Skips dependency locking     and   prompts.
+
+--remove	    Destructive: Remove the module completely (delete files, unregister from config/composer, remove DB state).
+
+--rollback	    Destructive: Rollback the module's migrations. Uses migration history in module_states.
+
+--dry-run	    Show what actions would be performed without actually making changes.
+
+--no-autoload	Skip running composer dump-autoload after the operation (useful for CI or batch runs).
+
 
 #### Module Testing
 - `module:update-phpunit-coverage` - Update PHPUnit coverage configuration

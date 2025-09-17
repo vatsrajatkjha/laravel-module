@@ -43,7 +43,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     public function __construct($app)
     {
         parent::__construct($app);
-        
+
         try {
             $reflection = new \ReflectionClass($this);
             $namespace = $reflection->getNamespaceName();
@@ -95,7 +95,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     {
         $moduleName = $this->getModuleName();
         $configPath = base_path("Modules/{$moduleName}/src/Config/config.php");
-        
+
         if (File::exists($configPath)) {
             $this->mergeConfigFrom($configPath, strtolower($moduleName));
             $this->publishes([
@@ -150,18 +150,18 @@ abstract class ModuleServiceProvider extends ServiceProvider
         if (File::exists($migrationsPath)) {
             // Register migrations with Laravel
             $this->loadMigrationsFrom($migrationsPath);
-            
+
             // Get all migration files
             $migrations = File::glob($migrationsPath . '/*.php');
             $migrationNames = array_map(function($file) {
                 return pathinfo($file, PATHINFO_FILENAME);
             }, $migrations);
-            
+
             // Update module state with migrations
             $moduleState = DB::table('module_states')
                 ->where('name', $moduleName)
                 ->first();
-                
+
             if ($moduleState) {
                 DB::table('module_states')
                     ->where('name', $moduleName)
@@ -170,7 +170,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
                         'updated_at' => now()
                     ]);
             }
-            
+
             // Ensure migrations table exists
             if (!Schema::hasTable('migrations')) {
                 Schema::create('migrations', function ($table) {
@@ -278,7 +278,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
             \RCV\Core\Console\Commands\ModuleHealthCheckCommand::class,
             \RCV\Core\Console\Commands\ModuleDependencyGraphCommand::class,
             \RCV\Core\Console\Commands\ModuleBackupCommand::class,
-            \RCV\Core\Console\Commands\ModuleMiddlewareCommand::class,
+            \RCV\Core\Console\Commands\Make\ModuleMiddlewareCommand::class,
         ]);
     }
-} 
+}

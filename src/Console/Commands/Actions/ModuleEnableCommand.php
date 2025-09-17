@@ -2,13 +2,14 @@
 
 namespace RCV\Core\Console\Commands\Actions;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 
 class ModuleEnableCommand extends Command
 {
-    // Accept multiple names (1 or more) 
+    // Accept multiple names (1 or more)
     protected $signature = 'module:enable {module* : Module name(s) to enable}';
     protected $description = 'Enable one or more modules from Modules/ or vendor/rcv/';
 
@@ -50,7 +51,7 @@ class ModuleEnableCommand extends Command
                 // Update or insert module state
                 $existing = DB::table('module_states')->where('name', $name)->first();
                 if ($existing) {
-                    \Log::info("Calling of the enable");
+                    Log::info("Calling of the enable");
 
                     DB::table('module_states')->where('name', $name)->update([
                         'enabled' => true,
@@ -77,6 +78,9 @@ class ModuleEnableCommand extends Command
                     $json['last_enabled_at'] = now()->toIso8601String();
                     File::put($moduleJsonPath, json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
                 }
+
+                // ✅ Dispatch event AFTER successful enable
+                event(new \RCV\Core\Events\ModuleEnabled($name));
 
                 $this->info("Module [{$name}] enabled.");
             } catch (\Exception $e) {
