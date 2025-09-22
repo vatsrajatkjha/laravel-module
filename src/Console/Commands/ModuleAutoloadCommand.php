@@ -61,7 +61,7 @@ class ModuleAutoloadCommand extends Command
      */
     public function handle()
     {
-        $modulesPath = base_path('modules');
+        $modulesPath = base_path('Modules');
         $modules = File::directories($modulesPath);
         
         $composerJson = json_decode(File::get(base_path('composer.json')), true);

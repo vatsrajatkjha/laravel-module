@@ -191,6 +191,8 @@ abstract class ModuleServiceProvider extends ServiceProvider
         $moduleName = $this->getModuleName();
         $webRoutePath = realpath(base_path("Modules/{$moduleName}/src/Routes/web.php"));
         $apiRoutePath = realpath(base_path("Modules/{$moduleName}/src/Routes/api.php"));
+        $webRoutePath = realpath(base_path("Modules/{$moduleName}/src/Routes/web.php"));
+        $apiRoutePath = realpath(base_path("Modules/{$moduleName}/src/Routes/api.php"));
 
         if ($webRoutePath && File::exists($webRoutePath)) {
             Route::middleware('web')
@@ -231,6 +233,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     {
         $moduleName = $this->getModuleName();
         return base_path("Modules/{$moduleName}/src/Database/Migrations");
+        return base_path("Modules/{$moduleName}/src/Database/Migrations");
     }
 
     /**
@@ -239,6 +242,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function getViewsPath(): string
     {
         $moduleName = $this->getModuleName();
+        return base_path("Modules/{$moduleName}/src/Resources/views");
         return base_path("Modules/{$moduleName}/src/Resources/views");
     }
 
@@ -249,6 +253,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     {
         $moduleName = $this->getModuleName();
         return base_path("Modules/{$moduleName}/src/Config/config.php");
+        return base_path("Modules/{$moduleName}/src/Config/config.php");
     }
 
     /**
@@ -257,6 +262,7 @@ abstract class ModuleServiceProvider extends ServiceProvider
     protected function getAssetsPath(): string
     {
         $moduleName = $this->getModuleName();
+        return base_path("Modules/{$moduleName}/src/Resources/assets");
         return base_path("Modules/{$moduleName}/src/Resources/assets");
     }
 

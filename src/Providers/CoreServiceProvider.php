@@ -311,6 +311,54 @@ class CoreServiceProvider extends ServiceProvider
         // Register commands only in console
         if ($this->app->runningInConsole()) {
             $this->commands($this->commands);
+
+            // Register seeder listener only once using singleton
+            $this->app->singleton('rcv.seeder.listener.registered', function () {
+                \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\CommandFinished::class, function ($event) {
+                    static $rcvSeedingModules = false;
+                    if ($rcvSeedingModules) {
+                        return;
+                    }
+
+                    if ($event->command === 'db:seed') {
+                        // Only run when no specific class is provided
+                        $input = $event->input ?? null;
+                        if ($input && $input->getOption('class')) {
+                            return;
+                        }
+
+                        $modulesPath = base_path('Modules');
+                        if (!\Illuminate\Support\Facades\File::exists($modulesPath)) {
+                            return;
+                        }
+
+                        $rcvSeedingModules = true;
+                        try {
+                            foreach (\Illuminate\Support\Facades\File::directories($modulesPath) as $moduleDir) {
+                                $moduleName = basename($moduleDir);
+                                $seederClass = "Modules\\\\{$moduleName}\\\\Database\\\\Seeders\\\\{$moduleName}DatabaseSeeder";
+                                if (class_exists($seederClass)) {
+                                    try {
+                                        \Illuminate\Support\Facades\Artisan::call('db:seed', [
+                                            '--class' => $seederClass,
+                                            '--force' => true,
+                                        ]);
+                                        $this->app['log']->info("Seeded module: {$moduleName}");
+                                    } catch (\Throwable $t) {
+                                        $this->app['log']->error("Failed seeding module {$moduleName}: " . $t->getMessage());
+                                    }
+                                }
+                            }
+                        } finally {
+                            $rcvSeedingModules = false;
+                        }
+                    }
+                });
+                return true;
+            });
+
+            // Force resolution
+            $this->app->make('rcv.seeder.listener.registered');
         }
     }
 

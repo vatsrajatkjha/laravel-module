@@ -28,12 +28,15 @@ class ModuleMakeControllerCommand extends Command
      */
     public function handle()
     {
-        $name = $this->argument('name');
+        $nameInput = str_replace('\\', '/', $this->argument('name'));
         $module = $this->argument('module');
+        $className = Str::studly(class_basename($nameInput));
+        $subPath = trim(dirname($nameInput), '.');
         $isResource = $this->option('resource');
         $isApi = $this->option('api');
 
         // Check if module exists
+        $modulePath = base_path("Modules/{$module}");
         $modulePath = base_path("Modules/{$module}");
         if (!File::exists($modulePath)) {
             $this->error("Module [{$module}] does not exist.");
@@ -47,23 +50,25 @@ class ModuleMakeControllerCommand extends Command
         }
 
         // Create controller
-        $controllerPath = "{$modulePath}/src/Http/Controllers";
+        $controllerPath = "{$modulePath}/src/Http/Controllers" . ($subPath !== '' ? '/' . $subPath : '');
         if (!File::exists($controllerPath)) {
             File::makeDirectory($controllerPath, 0755, true);
         }
 
         $stub = $this->getStub($isResource, $isApi);
-        $controllerFile = "{$controllerPath}/{$name}.php";
+        $controllerFile = "{$controllerPath}/{$className}.php";
 
         if (File::exists($controllerFile)) {
-            $this->error("Controller [{$name}] already exists.");
+            $this->error("Controller [{$className}] already exists.");
+            $this->info("Path: {$controllerFile}");
             return 1;
         }
 
-        $this->createController($stub, $name, $module, $isResource, $isApi);
+        $this->createController($stub, $className, $module, $isResource, $isApi, $subPath);
 
-        $this->info("Controller [{$name}] created successfully.");
+        $this->info("Controller [{$className}] created successfully.");
         $this->info("Created in [{$controllerFile}]");
+
         return 0;
     }
 
@@ -78,6 +83,7 @@ class ModuleMakeControllerCommand extends Command
         $stub = File::get(__DIR__ . '/../stubs/base-controller.stub');
         $stub = str_replace('{{ module_name }}', $module, $stub);
 
+        $controllerPath = base_path("Modules/{$module}/src/Http/Controllers");
         $controllerPath = base_path("Modules/{$module}/src/Http/Controllers");
         if (!File::exists($controllerPath)) {
             File::makeDirectory($controllerPath, 0755, true);
@@ -112,7 +118,7 @@ class ModuleMakeControllerCommand extends Command
      * @param bool $isApi
      * @return void
      */
-    protected function createController($stub, $name, $module, $isResource, $isApi)
+    protected function createController($stub, $name, $module, $isResource, $isApi, $subPath = '')
     {
         $stub = File::get(__DIR__ . '/../stubs/' . $stub);
 

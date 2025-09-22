@@ -84,7 +84,7 @@ class ModuleMigrateRollbackCommand extends Command
 
     protected function rollbackAllModules()
     {
-        $modulesPath = base_path('modules');
+        $modulesPath = base_path('Modules');
 
         if (!File::exists($modulesPath)) {
             $this->error("Modules directory not found: {$modulesPath}");

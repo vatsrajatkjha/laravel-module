@@ -35,7 +35,7 @@ class ModuleMigrateCommand extends Command
     {
         $this->info("Running migrations for all modules...");
 
-        $modulesPath = base_path('modules');
+        $modulesPath = base_path('Modules');
 
         if (!File::exists($modulesPath)) {
             $this->warn("Modules directory not found: {$modulesPath}");

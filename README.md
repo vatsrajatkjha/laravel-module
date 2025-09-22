@@ -465,6 +465,15 @@ php artisan module:profile --duration=5                  # Run a simple module p
 ### 🛠️ Available Commands
 
 #### Module Management
+- `module:marketplace` - Manage modules via marketplace
+  - Usage: `php artisan module:marketplace {action} {module*} [--force]`
+  - Actions:
+    - `list` (no module args required) → Lists available/installed modules
+    - `install {module...}` → Installs/enables modules
+    - `remove {module...} [--force]` → Removes modules (use --force to bypass checks)
+    - `update {module...}` → Updates modules
+    - `cleanup` → Cleans orphaned module states
+
 - `module:make` - Create a new module
 - `module:enable` - Enable a module
 - `module:disable` - Disable a module
@@ -939,7 +948,7 @@ We welcome contributions from the community! Here's how you can help:
 
 ```bash
 # 1. Fork the repository
-git clone https://github.com/Rishabh6688/core.git
+git clone https://github.com/RCV-Technologies/laravel-module.git
 
 # 2. Create a feature branch
 git checkout -b feature/amazing-feature
@@ -992,18 +1001,6 @@ git push origin feature/amazing-feature
 - 📝 [**Blog Posts**](https://blog.rcvtechnologies.com) - Best practices and tips
 - 💬 [**Community Forum**](https://github.com/rcv-technologies/laravel-core/discussions) - Get help from experts
 
-### 🛠️ Example Projects
-
-```bash
-# Clone example projects
-git clone https://github.com/rcv-technologies/laravel-core-examples.git
-
-# Available examples:
-# 1. E-commerce Platform (15 modules)
-# 2. CMS System (10 modules)
-# 3. API Gateway (8 modules)
-# 4. Multi-tenant SaaS (20 modules)
-```
 
 ### 🎯 Best Practices Guide
 
@@ -1300,7 +1297,7 @@ Special thanks to all contributors and the Laravel community:
 
 | Contributor | Contributions | Impact |
 |-------------|---------------|--------|
-| [@rajatjha](https://github.com/johndoe) | 50+ commits | 🚀 Core architecture |
+| [@rajatjha](https://github.com/vatsrajatkjha) | 50+ commits | 🚀 Core architecture |
 | [@Sadik   ](https://github.com/janedoe) | 30+ commits | 📚 Documentation |
 | [@devexpert](https://github.com/devexpert) | 25+ commits | 🧪 Testing framework |
 | [@designguru](https://github.com/designguru) | 20+ commits | 🎨 UI/UX improvements |
@@ -1331,6 +1328,7 @@ php artisan module:make YourAwesomeModule
 *Empowering developers to build better Laravel applications*
 
 </div>
+
 
 # RCV Core
 

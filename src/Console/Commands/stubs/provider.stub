@@ -27,10 +27,27 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
     }
 
     /**
+     * Dynamically register all config files in the module's Config directory.
+     */
+    protected function registerModuleConfigs(): void
+    {
+        $configPath = __DIR__ . '/../Config';
+        if (File::isDirectory($configPath)) {
+            foreach (File::files($configPath) as $file) {
+                if ($file->getExtension() === 'php') {
+                    $key = $file->getBasename('.php');
+                    $this->mergeConfigFrom($file->getRealPath(), $key);
+                }
+            }
+        }
+    }
+
+    /**
      * Bootstrap services.
      */
     public function boot(): void
     {
+        $this->publishModuleConfigs();
         $this->publishModuleConfigs();
         $this->registerCommands();
         $this->registerRoutes();
@@ -162,4 +179,6 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
         // Example:
         // \Illuminate\Support\Facades\Blade::component('x-alert', \Modules\{{ module_name }}\View\Components\Alert::class);
     }
+}
+
 }
