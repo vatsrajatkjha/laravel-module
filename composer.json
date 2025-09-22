@@ -16,8 +16,7 @@
         "development",
         "artisan",
         "commands",
-        "dynamic-loading",
-        "microservices"
+        "dynamic-loading"
     ],
     "homepage": "https://const-ant-laravel-corex-docs.vercel.app/",
     "support": {
