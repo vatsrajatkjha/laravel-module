@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 
 use Illuminate\Console\Command;
-use Rcv\Core\Services\ModuleManager;
+use RCV\Core\Services\ModuleManager;
 use Symfony\Component\Process\Process;
 
 class ModuleCommand extends Command

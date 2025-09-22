@@ -1,0 +1,84 @@
+# Docker Setup Guide
+
+This project comes with a ready-to-use **Docker setup** for local development and deployment.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Build the Docker image
+```bash
+docker build -t myapp:latest .
+````
+
+### 2. Run the containers
+
+```bash
+docker-compose up -d
+```
+
+### 3. Stop the containers
+
+```bash
+docker-compose down
+```
+
+---
+
+## ⚙️ Services
+
+* **php-fpm** → Runs the Laravel application
+* **nginx** → Serves the app and proxies requests to PHP
+* **mysql** → Database for local development
+* **supervisord** → Manages workers and the Laravel scheduler
+
+---
+
+## 📂 Directory Structure
+
+* **Dockerfile** → Base image setup (PHP + extensions)
+* **.dockerignore** → Ignore unnecessary files in the build context
+* **docker/php.ini** → Custom PHP configuration
+* **docker/nginx.conf** → Nginx server configuration
+* **docker/supervisord.conf** → Process manager configuration
+
+---
+
+## 🛠 Useful Commands
+
+### Run Artisan inside container
+
+```bash
+docker exec -it myapp-php php artisan migrate
+```
+
+### Run Composer inside container
+
+```bash
+docker exec -it myapp-php composer install
+```
+
+### Check logs
+
+```bash
+docker logs myapp-php
+docker logs myapp-nginx
+```
+
+---
+
+## ✅ Tips
+
+* Ensure `.env` file is properly configured for Docker.
+* Use `docker-compose.override.yml` for local customizations.
+* Rebuild image when changing PHP/Nginx configs:
+
+  ```bash
+  docker-compose build --no-cache
+  ```
+
+---
+
+Happy Coding 🎉
+
+```

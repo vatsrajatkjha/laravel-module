@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Install;
+namespace RCV\Core\Install;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +107,7 @@ abstract class BaseInstaller
         if (File::exists($assetsPath)) {
             File::copyDirectory(
                 $assetsPath,
-                public_path("modules/{$this->moduleName}")
+                public_path("Modules/{$this->moduleName}")
             );
         }
     }
@@ -152,7 +152,7 @@ abstract class BaseInstaller
 
     protected function removeAssets()
     {
-        $publicPath = public_path("modules/{$this->moduleName}");
+        $publicPath = public_path("Modules/{$this->moduleName}");
         
         if (File::exists($publicPath)) {
             File::deleteDirectory($publicPath);

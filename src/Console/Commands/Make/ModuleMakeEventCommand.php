@@ -1,44 +1,70 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
+
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
 class ModuleMakeEventCommand extends Command
 {
-    protected $signature = 'module:make-event {module} {name}';
+    protected $signature = 'module:make-event 
+                            {name : The event class name (can include subdirectories)} 
+                            {module : The module name}';
 
     protected $description = 'Create a new event class for the specified module';
 
     public function handle()
     {
-        $module = Str::studly($this->argument('module'));
-        $name = Str::studly($this->argument('name'));
+        // --- Module ---
+        $moduleInput = $this->argument('module');
+        $module = Str::studly($moduleInput);
+        $modulePath = $module;
 
-        $basePath = base_path("Modules/{$module}/src/Events");
-        $namespace = "Modules\\{$module}\\Events";
+        // --- Event class ---
+        $eventInput = $this->argument('name');
+        $eventParts = preg_split('/[\/\\\\]+/', $eventInput);
+        $className = Str::studly(array_pop($eventParts));
+        $subNamespace = implode('\\', array_map([Str::class, 'studly'], $eventParts));
+        $subPath = implode('/', array_map([Str::class, 'studly'], $eventParts));
 
-        $stub = File::get(__DIR__ . '/../stubs/event.stub');
+        // --- Paths & Namespace ---
+        $basePath = base_path("Modules/{$modulePath}/src/Events" . ($subPath ? "/{$subPath}" : ''));
+        $namespace = "Modules\\{$module}\\Events" . ($subNamespace ? "\\{$subNamespace}" : '');
+        $filePath = "{$basePath}/{$className}.php";
+
+        // --- Stub ---
+        $stubPath = __DIR__ . '/../stubs/event.stub';
+        if (!File::exists($stubPath)) {
+            $this->error("Missing stub file at: {$stubPath}");
+            return Command::FAILURE;
+        }
+
+        $stub = File::get($stubPath);
+
+        // --- Replace placeholders ---
         $stub = str_replace(
-            ['{{ module_name }}', '{{ class }}'],
-            [$namespace, $name],
+            ['{{ namespace }}', '{{ class }}'],
+            [$namespace, $className],
             $stub
         );
 
+        // --- Create directories if missing ---
         if (!File::exists($basePath)) {
             File::makeDirectory($basePath, 0755, true);
         }
 
-        $filePath = "{$basePath}/{$name}.php";
-
+        // --- Check for existing file ---
         if (File::exists($filePath)) {
-            $this->error("Event {$name} already exists in module {$module}.");
-            return;
+            $this->error("Event {$className} already exists in module {$module}.");
+            return Command::FAILURE;
         }
 
         File::put($filePath, $stub);
-        $this->info("Event {$name} created successfully in module {$module}.");
+
+        $this->info("Event {$className} created successfully in module {$module}.");
         $this->info("Path: {$filePath}");
+
+        return Command::SUCCESS;
     }
 }

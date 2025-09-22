@@ -1,10 +1,10 @@
 <?php
 
-namespace Rcv\Core;
+namespace RCV\Core;
 
 use Illuminate\Support\Facades\File;
-use Rcv\Core\Contracts\ModuleInterface;
-use Rcv\Core\Install\BaseInstaller;
+use RCV\Core\Contracts\ModuleInterface;
+use RCV\Core\Install\BaseInstaller;
 
 abstract class Module implements ModuleInterface
 {
@@ -114,17 +114,17 @@ abstract class Module implements ModuleInterface
         
         if ($enable) {
             // Add to require section if not exists
-            if (!isset($composerJson['require']["modules/{$moduleNameLower}"])) {
-                $composerJson['require']["modules/{$moduleNameLower}"] = "*";
+            if (!isset($composerJson['require']["Modules/{$moduleNameLower}"])) {
+                $composerJson['require']["Modules/{$moduleNameLower}"] = "*";
             }
             
             // Add to autoload psr-4 section if not exists
             if (!isset($composerJson['autoload']['psr-4']["Modules\\{$moduleNameStudly}\\"])) {
-                $composerJson['autoload']['psr-4']["Modules\\{$moduleNameStudly}\\"] = "packages/modules/{$moduleNameLower}/src/";
+                $composerJson['autoload']['psr-4']["Modules\\{$moduleNameStudly}\\"] = "packages/Modules/{$moduleNameLower}/src/";
             }
         } else {
             // Remove from require section
-            unset($composerJson['require']["modules/{$moduleNameLower}"]);
+            unset($composerJson['require']["Modules/{$moduleNameLower}"]);
             
             // Remove from autoload psr-4 section
             unset($composerJson['autoload']['psr-4']["Modules\\{$moduleNameStudly}\\"]);
@@ -181,12 +181,12 @@ abstract class Module implements ModuleInterface
         
         if ($enable) {
             // Add module to packages cache
-            $packages["modules/{$moduleNameLower}"] = [
+            $packages["Modules/{$moduleNameLower}"] = [
                 'providers' => [$providerClass],
             ];
         } else {
             // Remove module from packages cache
-            unset($packages["modules/{$moduleNameLower}"]);
+            unset($packages["Modules/{$moduleNameLower}"]);
         }
 
         // Write back to cache file

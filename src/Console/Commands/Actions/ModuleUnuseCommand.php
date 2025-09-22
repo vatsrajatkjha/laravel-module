@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Rcv\Core\Console\Commands\Actions;
+namespace RCV\Core\Console\Commands\Actions;
 
 
 use Illuminate\Console\Command;

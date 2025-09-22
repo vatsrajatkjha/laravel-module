@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Config;
@@ -59,11 +59,8 @@ class ModuleManager
      */
     public function getAvailableModules(): array
     {
-        // Bypass cache for debugging
-        $modules = $this->scanAvailableModules();
-        return array_map(function($module) {
-            return Str::studly($module);
-        }, $modules);
+        // Return actual directory names to ensure correct file paths
+        return $this->scanAvailableModules();
     }
     
     /**
@@ -96,11 +93,8 @@ class ModuleManager
      */
     public function getEnabledModules(): array
     {
-        // Bypass cache for debugging
-        $modules = $this->scanEnabledModules();
-        return array_map(function($module) {
-            return Str::studly($module);
-        }, $modules);
+        // Return actual directory names to ensure correct file paths
+        return $this->scanEnabledModules();
     }
     
     /**

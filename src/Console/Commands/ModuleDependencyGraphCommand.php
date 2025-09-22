@@ -1,8 +1,8 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 use Illuminate\Console\Command;
-use Rcv\Core\Services\ModuleDependencyGraph;
+use RCV\Core\Services\ModuleDependencyGraph;
 
 class ModuleDependencyGraphCommand extends Command
 {

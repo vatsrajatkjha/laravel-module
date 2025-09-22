@@ -38,7 +38,7 @@ if (!function_exists('module_enabled')) {
      */
     function module_enabled($module)
     {
-        return app(\Rcv\Core\Services\ModuleManager::class)->isEnabled($module);
+        return app(\RCV\Core\Services\ModuleManager::class)->isEnabled($module);
     }
 }
 

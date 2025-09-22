@@ -1,9 +1,9 @@
 <?php
 
-namespace Modules\{{ module_name }}\View\Components;
-
+namespace {{ namespace }};
 
 use Illuminate\View\Component;
+use Illuminate\View\View;
 
 class {{ class_name }} extends Component
 {
@@ -12,8 +12,8 @@ class {{ class_name }} extends Component
         //
     }
 
-    public function render()
+    public function render(): View|string
     {
-        return view('');
+        return view('{{ view_path }}');
     }
 }

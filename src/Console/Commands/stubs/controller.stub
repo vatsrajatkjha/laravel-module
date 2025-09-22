@@ -74,4 +74,4 @@ class {{ class_name }} extends Controller
     {
         //
     }
-} 
+}

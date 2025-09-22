@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
-use Rcv\Core\Services\ModuleMiddlewareManager;
+use RCV\Core\Services\ModuleMiddlewareManager;
 
 use Illuminate\Support\Facades\File;
 

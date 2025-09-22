@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 use Illuminate\Console\Command;
-use Rcv\Core\Services\ModuleHealthCheck;
-use Rcv\Core\Services\MarketplaceService;
+use RCV\Core\Services\ModuleHealthCheck;
+use RCV\Core\Services\MarketplaceService;
 
 class ModuleHealthCheckCommand extends Command
 {

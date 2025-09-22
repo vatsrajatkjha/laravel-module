@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Database\Seeders;
+namespace RCV\Core\Console\Commands\Database\Seeders;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;

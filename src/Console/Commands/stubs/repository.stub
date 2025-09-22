@@ -2,7 +2,7 @@
 
 namespace {{ namespace }};
 
-use Rcv\Core\Repositories\BaseRepository as CoreBaseRepository;
+use RCV\Core\Repositories\BaseRepository as CoreBaseRepository;
 
 class {{ class_name }} extends CoreBaseRepository
 {

@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -8,36 +8,46 @@ use Illuminate\Support\Str;
 
 class MakeModuleObserver extends Command
 {
-    protected $signature = 'module:make-observer {module} {name}';
+    protected $signature = 'module:make-observer 
+                            {name : The observer class name (can include subdirectories)} 
+                            {module : The module name}';
+
     protected $description = 'Create a new observer for the specified module';
 
     public function handle()
     {
-        $module = $this->argument('module'); // e.g. Blog
-        $name = $this->argument('name');     // e.g. PostObserver
+        $module = Str::studly($this->argument('module'));   // e.g., Blog
+        $nameInput = $this->argument('name');               // e.g., Admin/PostObserver
 
-        $className = Str::studly(class_basename($name));
-        $directory = base_path("Modules/{$module}/src/Observers");
-        $filePath = "{$directory}/{$className}.php";
+        // Split name to handle subdirectories
+        $parts = preg_split('/[\/\\\\]+/', $nameInput);
+        $className = Str::studly(array_pop($parts));       // Last part is class
+        $subPath = implode('/', array_map([Str::class, 'studly'], $parts));       // path under Observers
+        $subNamespace = implode('\\', array_map([Str::class, 'studly'], $parts)); // namespace under Observers
 
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
-        }
+        // Construct paths
+        $basePath = base_path("Modules/{$module}/src/Observers" . ($subPath ? "/{$subPath}" : ''));
+        $filePath = "{$basePath}/{$className}.php";
+        $namespace = "Modules\\{$module}\\Observers" . ($subNamespace ? "\\{$subNamespace}" : '');
 
+        // Check for existing file
         if (File::exists($filePath)) {
-            $this->error("Observer already exists: {$filePath}");
-            return 1;
+            $this->error("Observer {$className} already exists in module {$module}.");
+            return Command::FAILURE;
         }
 
-         $stubPath = __DIR__ . '/../stubs/observer.stub';
+        File::ensureDirectoryExists($basePath);
+
+        // Load stub
+        $stubPath = __DIR__ . '/../stubs/observer.stub';
         if (!File::exists($stubPath)) {
             $this->error("Stub file not found at: {$stubPath}");
-            return;
+            return Command::FAILURE;
         }
 
-        $stub = file_get_contents($stubPath);
-        $namespace = "Modules\\{$module}\\Observers";
+        $stub = File::get($stubPath);
 
+        // Replace namespace & class placeholders
         $content = str_replace(
             ['{{namespace}}', '{{class}}'],
             [$namespace, $className],
@@ -45,7 +55,10 @@ class MakeModuleObserver extends Command
         );
 
         File::put($filePath, $content);
-        $this->info("Observer created: {$filePath}");
-        return 0;
+
+        $this->info("Observer {$className} created successfully in module {$module}.");
+        $this->info("Path: {$filePath}");
+
+        return Command::SUCCESS;
     }
 }

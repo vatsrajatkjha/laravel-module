@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Repositories;
+namespace RCV\Core\Repositories;
 
 use Illuminate\Database\Eloquent\Model;
-use Rcv\Core\Contracts\RepositoryInterface;
+use RCV\Core\Contracts\RepositoryInterface;
 
 abstract class BaseRepository implements RepositoryInterface
 {

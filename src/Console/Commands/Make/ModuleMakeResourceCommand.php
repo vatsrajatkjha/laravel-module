@@ -1,14 +1,14 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
+
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
-
-class ModuleResourceMakeCommand extends Command
+class ModuleMakeResourceCommand extends Command
 {
-    protected $signature = 'module:make-resource {name} {module} {--collection : Create a resource collection}';
+    protected $signature = 'module:make-resource {name : The name of the resource} {module : The name of the module} {--collection : Create a resource collection}';
     protected $description = 'Create a new resource class for the specified module';
 
     public function handle()
@@ -17,11 +17,12 @@ class ModuleResourceMakeCommand extends Command
         $contents = $this->getTemplateContents();
 
         // Ensure directory exists
-        if (!file_exists(dirname($path))) {
-            mkdir(dirname($path), 0755, true);
+        $dir = dirname($path);
+        if (!File::exists($dir)) {
+            File::makeDirectory($dir, 0755, true);
         }
 
-        file_put_contents($path, $contents);
+        File::put($path, $contents);
 
         $resourceType = $this->isCollection() ? 'Resource Collection' : 'Resource';
         $this->info("{$resourceType} created: {$path}");
@@ -30,16 +31,19 @@ class ModuleResourceMakeCommand extends Command
     protected function getTemplateContents(): string
     {
         $module = $this->getModuleName();
-        $className = Str::studly($this->argument('name'));
-        
+
+        // Handle subdirectory
+        $nameParts = explode('/', $this->argument('name'));
+        $className = Str::studly(array_pop($nameParts));
+
         $stubPath = $this->getStubPath();
 
-        if (!file_exists($stubPath)) {
+        if (!File::exists($stubPath)) {
             $this->error("Stub file not found: {$stubPath}");
             exit(1);
         }
 
-        $stub = file_get_contents($stubPath);
+        $stub = File::get($stubPath);
 
         return str_replace(
             ['{{ module }}', '{{ class }}'],
@@ -51,9 +55,18 @@ class ModuleResourceMakeCommand extends Command
     protected function getDestinationFilePath(): string
     {
         $module = $this->getModuleName();
-        $className = Str::studly($this->argument('name'));
 
-        return base_path("Modules/{$module}/src/Http/Transformers/{$className}.php");
+        // Handle subdirectory
+        $nameParts = explode('/', $this->argument('name'));
+        $className = Str::studly(array_pop($nameParts));
+        $subDir = implode('/', $nameParts);
+
+        $basePath = base_path("Modules/{$module}/src/Http/Transformers");
+        if ($subDir) {
+            $basePath .= "/{$subDir}";
+        }
+
+        return "{$basePath}/{$className}.php";
     }
 
     protected function getModuleName(): string
@@ -63,8 +76,7 @@ class ModuleResourceMakeCommand extends Command
 
     protected function isCollection(): bool
     {
-        return $this->option('collection') || 
-               Str::endsWith($this->argument('name'), 'Collection');
+        return $this->option('collection') || Str::endsWith($this->argument('name'), 'Collection');
     }
 
     protected function getStubPath(): string

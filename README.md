@@ -143,9 +143,6 @@ Our modular architecture follows a **clean, organized structure** that promotes 
     │   │   └── 📄 config.php            # Module-specific config
     │   ├── 📁 Console/
     │   │   └── 📄 Commands/             # Artisan commands
-    │   ├── 📁 Contracts/
-    │   │   ├── 📄 UserRepositoryInterface.php
-    │   │   └── 📄 UserServiceInterface.php
     │   ├── 📁 Database/
     │   │   ├── 📁 Factories/            # Model factories
     │   │   ├── 📁 Migrations/           # Database migrations
@@ -189,6 +186,9 @@ Our modular architecture follows a **clean, organized structure** that promotes 
     │   │   ├── 📄 RouteServiceProvider.php
     │   │   └── 📄 EventServiceProvider.php
     │   ├── 📁 Repositories/
+    │   ├── └── 📁 Interfaces/
+    │   │   └── ├── 📄 UserRepositoryInterface.php
+    │   │   └── └── 📄 UserServiceInterface.php
     │   │   ├── 📄 UserRepository.php     # Data access layer
     │   │   └── 📄 UserProfileRepository.php
     │   ├── 📁 Resources/
@@ -264,9 +264,34 @@ class UserRepository extends BaseRepository implements UserRepositoryInterface
 }
 ```
 
+
+## 🛠 DevOps Assets Publisher
+
+The package includes a built-in command to **bootstrap Docker and DevOps configuration files** for your Laravel modules.  
+This helps developers and teams quickly spin up containerized environments with **Docker, Nginx, Supervisord, and PHP customizations**.  
+
+---
+
+### 📌 Command
+
+```bash
+php artisan module:devops:publish
+
+```
+## 🎯 Why This Is Useful?
+
+Quick Setup → No need to manually create Docker and K8s configs.
+
+Consistency → Standardized setup across all environments (local, staging, production).
+
+Extensible → Published stubs can be customized per project needs.
+
+CI/CD Ready → Prepares the foundation for GitHub Actions or other pipelines.
+
 ### 🛠️ Service Layer
 
 ```php
+
 <?php
 
 namespace Modules\UserManagement\Services;
@@ -321,13 +346,46 @@ php artisan module:enable {name}                  # Enable specific module
 php artisan module:disable {name}                 # Disable specific module
 
 # 📋 Module Information
-php artisan module:list                           # List all modules with status
-php artisan module:show                           # Show detailed module information
+php artisan module:marketplace list               # List all modules with status
+
+### `module:analyze`
+
+Analyze module dependencies, detect issues, and optionally export in different formats.
+
+**Usage:**
+
+```bash
+php artisan module:analyze [--format=table|json|dot]
+
+# Default analysis in table format
+php artisan module:analyze
+
+# Export to JSON
+php artisan module:analyze --format=json > graph.json
+
+# Generate a dependency graph image (requires Graphviz)
+php artisan module:analyze --format=dot > graph.dot
+dot -Tpng graph.dot -o graph.png
+
+### Output (table format):
+Modules: 5 | Relations: 4
+Issues detected:
+- Module [Blog] requires [UserManagement] which is disabled
+
++------------------+---------+---------+
+| Module           | Enabled | Version |
++------------------+---------+---------+
+| Blog             | yes     | 1.0.0   |
+| UserManagement   | no      | 1.2.1   |
+| Analytics        | yes     | 0.9.0   |
++------------------+---------+---------+
+
 
 # 🗂️ Module Lifecycle
-php artisan module:marketplace install {name}  # Install module dependencies
-php artisan module:marketplace remove {name}   # Uninstall module
-php artisan module:marketplace update {name}   # Update module
+php artisan module:marketplace install {name}     # Install module dependencies
+php artisan module:marketplace remove {name}      # Uninstall module
+php artisan module:marketplace update {name}      # Update module
+php artisan module:publish {name}                 # Publish module assets
 ```
 
 ### 🏗️ Component Generation Commands
@@ -335,12 +393,32 @@ php artisan module:marketplace update {name}   # Update module
 ```bash
 # 🎮 Controllers
 php artisan module:make-controller {name} {module}       # Create controller
-php artisan module:make-controller {name} {module} --api # Create API controller
 php artisan module:make-controller {name} {module} --resource # Create resource controller
 
 # 🗃️ Models & Database
 php artisan module:make-model {name} {module}            # Create model
+
 php artisan module:make-migration {name} {module}        # Create migration
+
+#e.g - 
+
+# Create a clients table in UserManagement with custom fields
+php artisan module:make-migration create_clients_table UserManagement
+
+# Create a clients table in UserManagement with custom fields
+php artisan module:make-migration create_clients_table UserManagement --fields="name:string,email:string,phone:string"
+
+# Add a column (e.g. status) to clients table
+php artisan module:make-migration add_status_to_clients_table UserManagement --fields="status:string"
+
+# Delete a column (e.g. phone) from clients table
+php artisan module:make-migration delete_phone_from_clients_table UserManagement --fields="phone:string"
+
+# Drop the clients table
+php artisan module:make-migration drop_clients_table UserManagement
+
+
+
 php artisan module:make-seeder {name} {module}           # Create seeder
 php artisan module:make-factory {name} {module}          # Create factory
 
@@ -354,10 +432,10 @@ php artisan module:make-resource {name} {module}         # Create API resource
 php artisan module:make-middleware {name} {module}       # Create middleware
 
 # 📧 Events & Notifications
-php artisan module:make-event {name} {module}            # Create event
-php artisan module:make-listener {name} {module}         # Create listener
-php artisan module:make-notification {name} {module}     # Create notification
-php artisan module:make-job {name} {module}              # Create job
+php artisan module:make-event {name} {module}                   # Create event
+php artisan module:make-listener {name} {eventName} {module}    # Create listener
+php artisan module:make-notification {name} {module}            # Create notification
+php artisan module:make-job {name} {module}                     # Create job
 
 # 🔐 Authorization
 php artisan module:make-policy {name} {module}           # Create policy
@@ -376,7 +454,13 @@ php artisan module:migrate-rollback {name}               # Rollback module migra
 php artisan module:seed {name}                           # Run module seeders
 php artisan module:route-list {name}                     # List module routes
 
+### Module Profiler
+
+php artisan module:profile --duration=5                  # Run a simple module profiling command to test the metrics system:
+
+
 ```
+
 
 ### 🛠️ Available Commands
 
@@ -393,6 +477,10 @@ php artisan module:route-list {name}                     # List module routes
 - `module:make` - Create a new module
 - `module:enable` - Enable a module
 - `module:disable` - Disable a module
+- `module:marketplace list` - List all modules
+- `module:marketplace install` - Install a module
+- `module:marketplace remove` - Uninstall a module
+- `module:marketplace update` - Update a module
 - `module:state` - Check module state
 - `module:debug` - Debug module information
 - `module:dependency-graph` - Generate module dependency graph
@@ -432,9 +520,73 @@ php artisan module:route-list {name}                     # List module routes
 - `module:make-mail` - Create a new mail
 - `module:make-artisan` - Create a new artisan command
 - `module:make-class` - Create a new class
+- `module:make-command` - Create a new command
 - `module:make-component` - Create a new component
 - `module:make-notification` - Create a new notification
 - `module:make-observer` - Create a new observer
+
+### 🔤 Module Translation Check Command
+
+The `module:lang` command validates **translation files and keys** across multiple locales inside a module.  
+It ensures consistency and helps catch missing translations before production.
+
+#### Usage
+
+```bash
+# Basic usage
+php artisan module:lang UserManagement
+
+# Fill missing keys with placeholder
+php artisan module:lang UserManagement --placeholder="__MISSING__"
+
+# Copy missing keys from fallback locale
+php artisan module:lang UserManagement --fallback=en
+
+```
+### 🧭 `module:commands`
+
+A **user-friendly interactive explorer** for all available module commands.  
+Instead of memorizing command names, you can navigate through categories and sub-categories with a simple numeric selection.
+
+
+#### ✅ Usage
+
+```bash
+
+php artisan module:commands
+
+```
+
+### 🔧 `module:disable`
+
+Disable one or more modules in a **safe, production-ready way**.  
+
+By default this command **only disables** the module (marks it inactive in `module_states` and `module.json`) without touching database tables or deleting files.  
+Destructive actions (rollback migrations, remove module files) require explicit flags.
+
+---
+
+
+
+### ✅ Usage
+
+```bash
+php artisan module:disable {module*} [options]
+
+```
+⚙️ Options
+Option	        Description
+
+--force	        Force disable even if other modules depend on this one. Skips dependency locking     and   prompts.
+
+--remove	    Destructive: Remove the module completely (delete files, unregister from config/composer, remove DB state).
+
+--rollback	    Destructive: Rollback the module's migrations. Uses migration history in module_states.
+
+--dry-run	    Show what actions would be performed without actually making changes.
+
+--no-autoload	Skip running composer dump-autoload after the operation (useful for CI or batch runs).
+
 
 #### Module Testing
 - `module:update-phpunit-coverage` - Update PHPUnit coverage configuration
@@ -1176,6 +1328,7 @@ php artisan module:make YourAwesomeModule
 *Empowering developers to build better Laravel applications*
 
 </div>
+
 
 # RCV Core
 

@@ -16,8 +16,7 @@
         "development",
         "artisan",
         "commands",
-        "dynamic-loading",
-        "microservices"
+        "dynamic-loading"
     ],
     "homepage": "https://const-ant-laravel-corex-docs.vercel.app/",
     "support": {
@@ -80,7 +79,12 @@
             ],
             "aliases": {
                 "Module": "RCV\\Core\\Facades\\Module",
-                "ModuleMetrics": "RCV\\Core\\Facades\\ModuleMetrics"
+                "ModuleMetrics": "RCV\\Core\\Facades\\ModuleMetrics",
+                "Security": "RCV\\Core\\Facades\\Security",
+                "Rpc": "RCV\\Core\\Facades\\Rpc",
+                "MessageBus": "RCV\\Core\\Facades\\MessageBus",
+                "Rbac": "RCV\\Core\\Facades\\Rbac",
+                "Abac": "RCV\\Core\\Facades\\Abac"
             }
         },
         "branch-alias": {

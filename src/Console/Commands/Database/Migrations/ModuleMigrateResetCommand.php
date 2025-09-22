@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Database\Migrations;
+namespace RCV\Core\Console\Commands\Database\Migrations;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;

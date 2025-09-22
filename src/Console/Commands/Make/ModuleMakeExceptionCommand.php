@@ -1,6 +1,7 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
+
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -8,48 +9,61 @@ use Illuminate\Support\Str;
 class ModuleMakeExceptionCommand extends Command
 {
     protected $signature = 'module:make-exception 
-                            {module : The module name} 
-                            {name : The name of the exception class}';
+                            {name : The exception class name (can include subdirectories)} 
+                            {module : The module name}';
 
     protected $description = 'Create a new exception class for the specified module';
 
     public function handle()
     {
-        $module = Str::studly($this->argument('module'));
-        $name = Str::studly($this->argument('name'));
+        // --- Module ---
+        $moduleInput = $this->argument('module');
+        $module = Str::studly($moduleInput);
+        $modulePath = $module;
 
-        $basePath = base_path("Modules/{$module}/src/Exceptions");
-        $namespace = "Modules\\{$module}\\Exceptions";
-        $filePath = "{$basePath}/{$name}.php";
+        // --- Exception class ---
+        $exceptionInput = $this->argument('name');
+        $exceptionParts = preg_split('/[\/\\\\]+/', $exceptionInput);
+        $className = Str::studly(array_pop($exceptionParts));
+        $subNamespace = implode('\\', array_map([Str::class, 'studly'], $exceptionParts));
+        $subPath = implode('/', array_map([Str::class, 'studly'], $exceptionParts));
 
+        // --- Paths & Namespace ---
+        $basePath = base_path("Modules/{$modulePath}/src/Exceptions" . ($subPath ? "/{$subPath}" : ''));
+        $namespace = "Modules\\{$module}\\Exceptions" . ($subNamespace ? "\\{$subNamespace}" : '');
+        $filePath = "{$basePath}/{$className}.php";
+
+        // --- Stub ---
         $stubPath = __DIR__ . '/../stubs/exception.stub';
-
         if (!File::exists($stubPath)) {
             $this->error("Missing stub: {$stubPath}");
-            return;
+            return Command::FAILURE;
         }
-
-        if (!File::isDirectory($basePath)) {
-            File::makeDirectory($basePath, 0755, true);
-        }
-
-        if (File::exists($filePath)) {
-            $this->error("Exception {$name} already exists in module {$module}.");
-            return;
-        }
-
         $stub = File::get($stubPath);
 
+        // --- Replace placeholders ---
         $content = str_replace(
             ['{{ namespace }}', '{{ class }}'],
-            [$namespace, $name],
+            [$namespace, $className],
             $stub
         );
 
+        // --- Create directory if missing ---
+        if (!File::exists($basePath)) {
+            File::makeDirectory($basePath, 0755, true);
+        }
+
+        // --- Check for existing file ---
+        if (File::exists($filePath)) {
+            $this->error("Exception {$className} already exists in module {$module}.");
+            return Command::FAILURE;
+        }
+
         File::put($filePath, $content);
 
-        $this->info("Exception {$name} created in module {$module}.");
+        $this->info("Exception {$className} created successfully in module {$module}.");
         $this->info("Path: {$filePath}");
 
+        return Command::SUCCESS;
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Rcv\Core\Console\Commands\Database\Seeders;
+namespace RCV\Core\Console\Commands\Database\Seeders;
 
 
 use Illuminate\Support\Str;

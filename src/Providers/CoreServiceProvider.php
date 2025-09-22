@@ -1,95 +1,117 @@
 <?php
 
-namespace Rcv\Core\Providers;
+namespace RCV\Core\Providers;
 
 use Illuminate\Support\Str;
-use Rcv\Core\Services\BaseService;
-use Rcv\Core\Services\ModuleLoader;
+use RCV\Core\Events\ModuleEnabled;
+use RCV\Core\Services\BaseService;
+use Illuminate\Support\Facades\Log;
+use RCV\Core\Events\ModuleDisabled;
+use RCV\Core\Services\ModuleLoader;
 use Illuminate\Support\Facades\File;
-use Rcv\Core\Services\ModuleManager;
+use RCV\Core\Services\ModuleManager;
+use RCV\Core\Services\ModuleMetrics;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
-use Rcv\Core\Contracts\ServiceInterface;
-use Rcv\Core\Repositories\BaseRepository;
-use Rcv\Core\Repositories\MainRepository;
-use Rcv\Core\Services\MarketplaceService;
-use Rcv\Core\Contracts\RepositoryInterface;
-use Rcv\Core\Console\Commands\Make\MakeEnum;
-use Rcv\Core\Console\Commands\Make\MakeAction;
-use Rcv\Core\Console\Commands\Make\MakeChannel;
-use Rcv\Core\Services\ModuleRegistrationService;
-use Rcv\Core\Console\Commands\ModuleDebugCommand;
-use Rcv\Core\Console\Commands\ModuleSetupCommand;
-use Rcv\Core\Console\Commands\ModuleStateCommand;
-use Rcv\Core\Console\Commands\Make\MakeJobCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleRule;
-use Rcv\Core\Console\Commands\ModuleBackupCommand;
-use Rcv\Core\Console\Commands\ModuleClearCompiled;
-use Rcv\Core\Console\Commands\Make\MakeCastCommand;
-use Rcv\Core\Console\Commands\Make\MakeMailCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleClass;
-use Rcv\Core\Console\Commands\Make\MakeModuleTrait;
-use Rcv\Core\Console\Commands\MigrateV1ModulesToV2;
-use Rcv\Core\Console\Commands\Make\MakeModulePolicy;
-use Rcv\Core\Console\Commands\ModuleAutoloadCommand;
-use Rcv\Core\Console\Commands\UpdatePhpunitCoverage;
-use Rcv\Core\Console\Commands\DiscoverModulesCommand;
-use Rcv\Core\Console\Commands\Make\MakeComponentView;
-use Rcv\Core\Console\Commands\Make\MakeModuleRequest;
-use Rcv\Core\Console\Commands\Make\ModuleAllCommands;
-use Rcv\Core\Console\Commands\Make\ModuleMakeCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleObserver;
-use Rcv\Core\Console\Commands\Make\ModuleMakeListener;
-use Rcv\Core\Console\Commands\Actions\ModuleUseCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleComponent;
-use Rcv\Core\Console\Commands\ModuleHealthCheckCommand;
-use Rcv\Core\Console\Commands\Make\MakeInterfaceCommand;
-use Rcv\Core\Console\Commands\Actions\ModulePruneCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleUnuseCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMakeViewCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleEnableCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleNotification;
-use Rcv\Core\Console\Commands\Make\ModuleMakeEventCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMakeScopeCommand;
-use Rcv\Core\Console\Commands\Make\ModuleModelMakeCommand;
-use Rcv\Core\Console\Commands\Publish\ModulePublishConfig;
-use Rcv\Core\Console\Commands\Actions\ModuleDisableCommand;
-use Rcv\Core\Console\Commands\Database\Seeders\ListSeeders;
-use Rcv\Core\Console\Commands\Make\ModuleMakeHelperCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMiddlewareCommand;
-use Rcv\Core\Console\Commands\ModuleDependencyGraphCommand;
-use Rcv\Core\Console\Commands\Make\MakeModuleArtisanCommand;
-use Rcv\Core\Console\Commands\Make\ModuleServiceMakeCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleShowModelCommand;
-use Rcv\Core\Console\Commands\Make\ModuleResourceMakeCommand;
-use Rcv\Core\Console\Commands\Publish\ModulePublishMigration;
-use Rcv\Core\Console\Commands\Make\ModuleEventProviderCommand;
-use Rcv\Core\Console\Commands\Make\ModuleMakeExceptionCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleMarketplaceCommand;
-use Rcv\Core\Console\Commands\Make\ModuleControllerMakeCommand;
-use Rcv\Core\Console\Commands\Make\ModuleRepositoryMakeCommand;
-use Rcv\Core\Console\Commands\Publish\ModulePublishTranslation;
-use Rcv\Core\Console\Commands\Actions\ModuleCheckUpdatesCommand;
-use Rcv\Core\Console\Commands\Actions\ModuleCommandsListCommand;
-use Rcv\Core\Console\Commands\Database\Seeders\MakeModuleSeeder;
-use Rcv\Core\Console\Commands\Database\Migrations\MigrateRefresh;
-use Rcv\Core\Console\Commands\Database\Seeders\ModuleSeedCommand;
-use Rcv\Core\Console\Commands\Make\ModuleRouteProviderMakeCommand;
-use Rcv\Core\Console\Commands\Database\Factories\MakeModuleFactory;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrateFresh;
-use Rcv\Core\Console\Commands\Database\Migrations\MigrateStatusCommand;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrateCommand;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrationMakeCommand;
-use Rcv\Core\Console\Commands\Database\Migrations\MigrateSingleModuleMigration;
-use Rcv\Core\Console\Commands\Database\Migrations\ModuleMigrateRollbackCommand;
+use RCV\Core\Contracts\ServiceInterface;
+use RCV\Core\Repositories\BaseRepository;
+use RCV\Core\Services\MarketplaceService;
+use RCV\Core\Contracts\RepositoryInterface;
+use RCV\Core\Services\Messaging\MessageBus;
+use RCV\Core\Services\Security\RbacManager;
+use RCV\Core\Console\Commands\Make\MakeEnum;
+use RCV\Core\Services\Security\AbacEvaluator;
+use RCV\Core\Services\Security\AccessManager;
+use RCV\Core\Console\Commands\Make\MakeAction;
+use RCV\Core\Console\Commands\Make\MakeChannel;
+use RCV\Core\Services\Communication\RpcManager;
+
+// Import all command classes
+use RCV\Core\Console\Commands\Docs\GenerateDocs;
+use RCV\Core\Listeners\ClearCacheOnModuleEnable;
+use RCV\Core\Services\ModuleRegistrationService;
+use RCV\Core\Console\Commands\ModuleDebugCommand;
+use RCV\Core\Console\Commands\ModuleSetupCommand;
+use RCV\Core\Console\Commands\ModuleStateCommand;
+use RCV\Core\Listeners\ClearCacheOnModuleDisable;
+use RCV\Core\Console\Commands\Make\MakeJobCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleRule;
+use RCV\Core\Console\Commands\ModuleBackupCommand;
+use RCV\Core\Console\Commands\ModuleClearCompiled;
+use RCV\Core\Console\Commands\Make\MakeCastCommand;
+use RCV\Core\Console\Commands\Make\MakeMailCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleClass;
+use RCV\Core\Console\Commands\Make\MakeModuleTrait;
+use RCV\Core\Console\Commands\MigrateV1ModulesToV2;
+use RCV\Core\Console\Commands\Make\MakeModulePolicy;
+use RCV\Core\Console\Commands\ModuleAutoloadCommand;
+use RCV\Core\Console\Commands\UpdatePhpunitCoverage;
+use RCV\Core\Console\Commands\DiscoverModulesCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleRequest;
+use RCV\Core\Console\Commands\Make\ModuleAllCommands;
+use RCV\Core\Console\Commands\Make\ModuleMakeCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleObserver;
+use RCV\Core\Console\Commands\Make\ModuleMakeListener;
+use RCV\Core\Console\Commands\Actions\ModuleUseCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleComponent;
+use RCV\Core\Console\Commands\ModuleHealthCheckCommand;
+use RCV\Core\Console\Commands\Make\MakeInterfaceCommand;
+use RCV\Core\Console\Commands\Actions\ModulePruneCommand;
+use RCV\Core\Console\Commands\Actions\ModuleUnuseCommand;
+use RCV\Core\Console\Commands\DevOps\PublishDevopsAssets;
+use RCV\Core\Console\Commands\Make\ModuleMakeViewCommand;
+use RCV\Core\Console\Commands\Actions\ModuleEnableCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleNotification;
+use RCV\Core\Console\Commands\Make\ModuleMakeEventCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeModelCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeScopeCommand;
+use RCV\Core\Console\Commands\Publish\ModulePublishConfig;
+use RCV\Core\Console\Commands\Actions\ModuleDisableCommand;
+use RCV\Core\Console\Commands\Analyze\ModuleAnalyzeCommand;
+use RCV\Core\Console\Commands\Database\Seeders\ListSeeders;
+use RCV\Core\Console\Commands\Make\ModuleMakeHelperCommand;
+use RCV\Core\Console\Commands\Make\ModuleMiddlewareCommand;
+use RCV\Core\Console\Commands\ModuleDependencyGraphCommand;
+use RCV\Core\Console\Commands\Upgrade\ModuleUpgradeCommand;
+use RCV\Core\Console\Commands\DevTools\ModuleProfileCommand;
+use RCV\Core\Console\Commands\Make\MakeModuleArtisanCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeServiceCommand;
+use RCV\Core\Console\Commands\Actions\ModuleCheckLangCommand;
+use RCV\Core\Console\Commands\Actions\ModuleShowModelCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeResourceCommand;
+use RCV\Core\Console\Commands\Publish\ModulePublishMigration;
+use RCV\Core\Console\Commands\Make\ModuleEventProviderCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeExceptionCommand;
+use RCV\Core\Console\Commands\Actions\ModuleMarketplaceCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeControllerCommand;
+use RCV\Core\Console\Commands\Make\ModuleMakeRepositoryCommand;
+use RCV\Core\Console\Commands\Publish\ModulePublishTranslation;
+use RCV\Core\Console\Commands\Actions\ModuleCheckUpdatesCommand;
+use RCV\Core\Console\Commands\Actions\ModuleCommandsListCommand;
+use RCV\Core\Console\Commands\Database\Seeders\MakeModuleSeeder;
+use RCV\Core\Console\Commands\Database\Migrations\MigrateRefresh;
+use RCV\Core\Console\Commands\Database\Seeders\ModuleSeedCommand;
+use RCV\Core\Console\Commands\Make\ModuleRouteProviderMakeCommand;
+use RCV\Core\Console\Commands\Database\Factories\MakeModuleFactory;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateFresh;
+use RCV\Core\Console\Commands\Database\Migrations\MigrateStatusCommand;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateCommand;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateResetCommand;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrationMakeCommand;
+use RCV\Core\Console\Commands\Database\Migrations\MigrateSingleModuleMigration;
+use RCV\Core\Console\Commands\Database\Migrations\ModuleMigrateRollbackCommand;
 
 class CoreServiceProvider extends ServiceProvider
 {
     protected $moduleName = 'Core';
     protected $moduleNameLower = 'core';
-    protected $moduleNamespace = 'Rcv\Core';
+    protected $moduleNamespace = 'RCV\Core';
 
+    /**
+     * All available Artisan commands.
+     */
     protected $commands = [
         // Action Commands
         ModuleMarketplaceCommand::class,
@@ -113,15 +135,17 @@ class CoreServiceProvider extends ServiceProvider
         // Make Commands
         ModuleAllCommands::class,
         ModuleMakeCommand::class,
-        ModuleControllerMakeCommand::class,
-        ModuleModelMakeCommand::class,
-        ModuleResourceMakeCommand::class,
-        ModuleRepositoryMakeCommand::class,
+        ModuleMakeControllerCommand::class,
+        ModuleMakeModelCommand::class,
+        ModuleMakeResourceCommand::class,
+        ModuleMakeRepositoryCommand::class,
         ModuleMakeEventCommand::class,
         ModuleMakeHelperCommand::class,
         ModuleMakeExceptionCommand::class,
         ModuleMakeScopeCommand::class,
-        MakeComponentView::class,
+        ModuleMakeViewCommand::class,
+        ModuleMakeServiceCommand::class,
+        ModuleMakeListener::class,
         MakeChannel::class,
         MakeModuleClass::class,
         MakeModuleArtisanCommand::class,
@@ -133,14 +157,11 @@ class CoreServiceProvider extends ServiceProvider
         ModuleAutoloadCommand::class,
         MakeModuleComponent::class,
         MakeModuleRequest::class,
-        ModuleMakeListener::class,
-        ModuleMakeViewCommand::class,
         ModuleRouteProviderMakeCommand::class,
         ModulePublishConfig::class,
         ModulePublishMigration::class,
         ModulePublishTranslation::class,
         ModuleEventProviderCommand::class,
-        ModuleServiceMakeCommand::class,
         MakeCastCommand::class,
         MakeJobCommand::class,
         MakeMailCommand::class,
@@ -154,7 +175,6 @@ class CoreServiceProvider extends ServiceProvider
         MigrateRefresh::class,
         MigrateSingleModuleMigration::class,
         MigrateStatusCommand::class,
-
         ModuleMigrateRollbackCommand::class,
         ModuleMigrationMakeCommand::class,
         ListSeeders::class,
@@ -162,10 +182,19 @@ class CoreServiceProvider extends ServiceProvider
         ModuleSeedCommand::class,
         ModuleMigrateCommand::class,
         ModuleMigrateFresh::class,
+        ModuleMigrateResetCommand::class,
+
+        // Analysis & DevOps Commands
+        GenerateDocs::class,
+        ModuleUpgradeCommand::class,
+        PublishDevopsAssets::class,
+        ModuleProfileCommand::class,
+        ModuleAnalyzeCommand::class,
 
         // Other Commands
         MigrateV1ModulesToV2::class,
         UpdatePhpunitCoverage::class,
+        ModuleCheckLangCommand::class,
     ];
 
     /**
@@ -175,29 +204,26 @@ class CoreServiceProvider extends ServiceProvider
     {
         parent::register();
 
-        $this->app->bind(RepositoryInterface::class, BaseRepository::class);
-        // $this->app->bind(Repository::class, MainRepository::class);
-        $this->app->bind(ServiceInterface::class, BaseService::class);
+        // Register configuration first
         $this->registerConfig();
 
-        $this->app->singleton(ModuleManager::class);
-        $this->app->singleton(ModuleRegistrationService::class);
-        $this->app->singleton(MarketplaceService::class);
+        // Register event listeners
+        Event::listen(ModuleEnabled::class, ClearCacheOnModuleEnable::class);
+        Event::listen(ModuleDisabled::class, ClearCacheOnModuleDisable::class);
 
-        $this->app->singleton(ModuleLoader::class, function ($app) {
-            return new ModuleLoader();
-        });
+        // Bind contracts
+        $this->app->bind(RepositoryInterface::class, BaseRepository::class);
+        $this->app->bind(ServiceInterface::class, BaseService::class);
 
+        // Register core singletons
+        $this->registerCoreSingletons();
+
+        // Register commands
         $this->commands($this->commands);
+        $this->registerAdditionalCommands();
 
-        // Use application-level singleton to prevent multiple registrations
-        $this->app->singleton('rcv.modules.registered', function () {
-            $this->registerModuleProviders();
-            return true;
-        });
-
-        // Force resolution to ensure registration happens only once
-        $this->app->make('rcv.modules.registered');
+        // FIXED: Register module providers in register() method
+        $this->registerModuleProviders();
     }
 
     /**
@@ -205,61 +231,84 @@ class CoreServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->registerConfig();
-        $this->registerCommands();
         $this->registerRoutes();
         $this->registerViews();
         $this->registerTranslations();
         $this->registerMigrations();
-        
-        // Use application-level singleton to prevent multiple boots
-        $this->app->singleton('rcv.modules.booted', function () {
-            $this->bootModules();
-            return true;
+        $this->bootModules();
+    }
+
+    /**
+     * Register core singleton services.
+     */
+    protected function registerCoreSingletons(): void
+    {
+        // Core services
+        $this->app->singleton(ModuleManager::class);
+        $this->app->singleton(ModuleRegistrationService::class);
+        $this->app->singleton(MarketplaceService::class);
+        $this->app->singleton(ModuleLoader::class);
+
+        // Named singletons with proper error handling
+        $this->app->singleton('rcv.core.module_metrics', function ($app) {
+            return new ModuleMetrics();
         });
 
-        // Force resolution to ensure booting happens only once
-        $this->app->make('rcv.modules.booted');
+        $this->app->singleton('rcv.core.security', function ($app) {
+            return new AccessManager();
+        });
+
+        $this->app->singleton('rcv.core.rpc', function ($app) {
+            return new RpcManager();
+        });
+
+        $this->app->singleton('rcv.core.rbac', function ($app) {
+            $rbac = new RbacManager();
+            $roles = config('security.rbac.roles', []);
+
+            if (!is_array($roles)) {
+                Log::warning('RBAC roles configuration is not an array, skipping role definitions');
+                return $rbac;
+            }
+
+            foreach ($roles as $role => $perms) {
+                try {
+                    $rbac->defineRole($role, (array) $perms);
+                } catch (\Throwable $e) {
+                    Log::error("Failed to define RBAC role '{$role}': " . $e->getMessage());
+                    report($e);
+                }
+            }
+            return $rbac;
+        });
+
+        $this->app->singleton('rcv.core.abac', function ($app) {
+            return new AbacEvaluator();
+        });
+
+        $this->app->singleton('rcv.core.message_bus', function ($app) {
+            return new MessageBus();
+        });
     }
 
     /**
-     * Register config.
+     * Register additional commands from config and other sources.
      */
-    protected function registerConfig(): void
+    protected function registerAdditionalCommands(): void
     {
-        $configPath = __DIR__.'/../Config/config.php';
-        $marketplaceConfigPath = __DIR__.'/../Config/marketplace.php';
-        
-        if (File::exists($configPath)) {
-            $this->mergeConfigFrom($configPath, 'core');
-        }
-
-        if (File::exists($marketplaceConfigPath)) {
-            $this->mergeConfigFrom($marketplaceConfigPath, 'marketplace');
-        }
-
-        $this->publishes([
-            __DIR__.'/../Config/config.php' => config_path('core.php'),
-        ], 'config');
-    }
-
-    /**
-     * Register commands.
-     */
-    protected function registerCommands(): void
-    {
-        $configPath = __DIR__.'/../Config/config.php';
+        // Register commands from config file
+        $configPath = __DIR__ . '/../Config/config.php';
         if (File::exists($configPath)) {
             $config = require $configPath;
-            if (isset($config['commands'])) {
+            if (!empty($config['commands']) && is_array($config['commands'])) {
                 $this->commands($config['commands']);
             }
         }
 
-        $this->commands([
-            ModuleAutoloadCommand::class,
-        ]);
+        // Always register autoload command
+        $this->commands([ModuleAutoloadCommand::class]);
 
+        // Register commands only in console
         if ($this->app->runningInConsole()) {
             $this->commands($this->commands);
 
@@ -314,28 +363,74 @@ class CoreServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register routes.
+     * Register config files with improved error handling.
      */
-    protected function registerRoutes(): void
+    protected function registerConfig(): void
     {
-        Route::group(['middleware' => ['web']], function () {
-            $this->loadRoutesFrom(__DIR__.'/../Routes/web.php');
-        });
+        $configs = [
+            'core' => __DIR__ . '/../Config/config.php',
+            'marketplace' => __DIR__ . '/../Config/marketplace.php',
+            'metrics' => __DIR__ . '/../Config/metrics.php',
+            'security' => __DIR__ . '/../Config/security.php',
+            'communication' => __DIR__ . '/../Config/communication.php',
+        ];
 
-        Route::group(['middleware' => ['api']], function () {
-            $this->loadRoutesFrom(__DIR__.'/../Routes/api.php');
-        });
+        foreach ($configs as $key => $path) {
+            if (File::exists($path)) {
+                try {
+                    $this->mergeConfigFrom($path, $key);
+                } catch (\Throwable $e) {
+                    Log::error("Failed to load config file {$path}: " . $e->getMessage());
+                    report($e);
+                }
+            } else if (config('core.debug_config_loading', false)) {
+                Log::debug("Config file not found: {$path}");
+            }
+        }
+
+        // Publish config files
+        $this->publishes([
+            __DIR__ . '/../Config/config.php' => config_path('core.php'),
+            __DIR__ . '/../Config/marketplace.php' => config_path('marketplace.php'),
+            __DIR__ . '/../Config/metrics.php' => config_path('metrics.php'),
+            __DIR__ . '/../Config/security.php' => config_path('security.php'),
+            __DIR__ . '/../Config/communication.php' => config_path('communication.php'),
+        ], 'rcv-core-config');
     }
 
     /**
-     * Register views.
+     * Register routes with improved structure.
+     */
+    protected function registerRoutes(): void
+    {
+        // Web routes
+        $webRoutePath = __DIR__ . '/../Routes/web.php';
+        if (File::exists($webRoutePath)) {
+            Route::middleware('web')->group($webRoutePath);
+        }
+
+        // API routes
+        $apiRoutePath = __DIR__ . '/../Routes/api.php';
+        if (File::exists($apiRoutePath)) {
+            Route::middleware('api')->group($apiRoutePath);
+        }
+    }
+
+    /**
+     * Register views with fallback paths.
      */
     protected function registerViews(): void
     {
-        $viewPath = base_path('Modules/Core/src/Resources/views');
-        
-        if (File::exists($viewPath)) {
-            $this->loadViewsFrom($viewPath, 'core');
+        $viewPaths = [
+            base_path('Modules/Core/src/Resources/views'),
+            __DIR__ . '/../Resources/views',
+        ];
+
+        foreach ($viewPaths as $path) {
+            if (File::exists($path)) {
+                $this->loadViewsFrom($path, 'core');
+                break;
+            }
         }
     }
 
@@ -344,19 +439,23 @@ class CoreServiceProvider extends ServiceProvider
      */
     protected function registerTranslations(): void
     {
-        $this->loadTranslationsFrom(__DIR__.'/../Resources/lang', 'core');
+        $langPath = __DIR__ . '/../Resources/lang';
+        if (File::exists($langPath)) {
+            $this->loadTranslationsFrom($langPath, 'core');
+        }
     }
 
     /**
-     * Register migrations.
+     * Register migrations with proper path handling.
      */
     protected function registerMigrations(): void
     {
-        $migrationsPath = base_path(__DIR__.'/../database/migrations');
+        // FIXED: Corrected migration path concatenation
+        $migrationsPath = __DIR__ . '/../Database/Migrations';
 
         $this->publishes([
-            __DIR__ . '/../Database/Migrations' => database_path('migrations/'),
-        ], 'core-module-migrations');
+            $migrationsPath => database_path('migrations/'),
+        ], 'rcv-core-migrations');
 
         if (File::exists($migrationsPath)) {
             $this->loadMigrationsFrom($migrationsPath);
@@ -364,103 +463,124 @@ class CoreServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register module service providers.
+     * Register module service providers (called during register phase - no caching).
      */
     protected function registerModuleProviders(): void
     {
         try {
-            // Check if we already have registered providers in this application instance
-            if ($this->app->bound('rcv.registered.providers')) {
-                return; // Already registered
+            // Don't use Cache during register() - it's not available yet
+            $modules = $this->app->make(ModuleManager::class)->getEnabledModules();
+
+            if (empty($modules) || !is_array($modules)) {
+                return;
             }
 
-            $moduleManager = $this->app->make(ModuleManager::class);
-            $modules = $moduleManager->getEnabledModules();
-            
-            $registeredProviders = [];
-            
             foreach ($modules as $module) {
-                $studlyModule = Str::studly($module);
-                $providerClass = "Modules\\{$studlyModule}\\Providers\\{$studlyModule}ServiceProvider";
-                
-                if (class_exists($providerClass)) {
-                    try {
-                        // Check if provider is already registered in Laravel's container
-                        if (!in_array($providerClass, $this->app->getLoadedProviders())) {
-                            $provider = $this->app->resolveProvider($providerClass);
-                            $this->app->register($provider);
-                            $registeredProviders[] = $providerClass;
-                        }
-                    } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error("Failed to register provider {$providerClass}: " . $e->getMessage());
-                        throw $e;
-                    }
-                } else {
-                    \Illuminate\Support\Facades\Log::warning("Provider class not found: {$providerClass}");
-                }
+                $this->registerSingleModuleProvider($module);
             }
+        } catch (\Throwable $e) {
+            Log::error("Critical error in registerModuleProviders: " . $e->getMessage());
+            report($e);
 
-            // Store the registered providers list as a singleton
-            $this->app->singleton('rcv.registered.providers', function () use ($registeredProviders) {
-                return $registeredProviders;
-            });
-
-            // Only log if there were actual registrations
-            if (!empty($registeredProviders) && config('app.debug', false)) {
-                \Illuminate\Support\Facades\Log::debug('Module providers registered', $registeredProviders);
-            }
-
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Error in registerModuleProviders: " . $e->getMessage());
-            throw $e;
+            // Continue execution - don't break the application
         }
     }
 
     /**
-     * Boot registered modules.
+     * Register a single module provider.
+     */
+    protected function registerSingleModuleProvider(string $module): void
+    {
+        $studly = Str::studly($module);
+        $providerClass = "Modules\\{$studly}\\Providers\\{$studly}ServiceProvider";
+
+        if (!class_exists($providerClass)) {
+            return;
+        }
+
+        // Skip if already registered
+        if ($this->app->getProvider($providerClass)) {
+            return;
+        }
+
+        try {
+            $provider = $this->app->resolveProvider($providerClass);
+            $this->app->register($provider);
+
+        } catch (\Throwable $e) {
+            Log::error("Failed to register provider {$providerClass}: " . $e->getMessage());
+            report($e);
+        }
+    }
+
+    /**
+     * Boot registered modules with improved error handling and caching.
      */
     protected function bootModules(): void
     {
         try {
-            // Check if we already have booted modules in this application instance
-            if ($this->app->bound('rcv.booted.modules')) {
-                return; // Already booted
-            }
+            // Now we can safely use Cache during boot phase
+            $cacheKey = 'rcv_enabled_modules_' . md5(config('app.key', 'default'));
+            $cacheTtl = config('core.module_cache_ttl', 3600);
 
-            // Get the registered providers
-            if (!$this->app->bound('rcv.registered.providers')) {
-                return; // No providers registered yet
-            }
-
-            $registeredProviders = $this->app->make('rcv.registered.providers');
-            $bootedModules = [];
-
-            foreach ($registeredProviders as $providerClass) {
-                try {
-                    $provider = $this->app->resolveProvider($providerClass);
-                    if (method_exists($provider, 'boot')) {
-                        call_user_func([$provider, 'boot']);
-                        $bootedModules[] = $providerClass;
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error("Failed to boot provider {$providerClass}: " . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            // Mark as booted
-            $this->app->singleton('rcv.booted.modules', function () use ($bootedModules) {
-                return $bootedModules;
+            $modules = Cache::remember($cacheKey, $cacheTtl, function () {
+                return $this->app->make(ModuleManager::class)->getEnabledModules();
             });
 
-            // Only log if there were actual boots
-            if (!empty($bootedModules) && config('app.debug', false)) {
-                \Illuminate\Support\Facades\Log::debug('Module providers booted', $bootedModules);
+            if (empty($modules)) {
+                return;
             }
 
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Error in bootModules: " . $e->getMessage());
-            throw $e;
+            foreach ($modules as $module) {
+                $this->bootSingleModule($module);
+            }
+        } catch (\Throwable $e) {
+            Log::error("Error in bootModules: " . $e->getMessage());
+            report($e);
+
+            // Fallback: try without cache
+            $this->bootModulesWithoutCache();
+        }
+    }
+
+    /**
+     * Fallback boot method without caching.
+     */
+    protected function bootModulesWithoutCache(): void
+    {
+        try {
+            $modules = $this->app->make(ModuleManager::class)->getEnabledModules();
+
+            foreach ($modules as $module) {
+                $this->bootSingleModule($module);
+            }
+        } catch (\Throwable $e) {
+            Log::error("Fallback bootModules also failed: " . $e->getMessage());
+            report($e);
+        }
+    }
+
+    /**
+     * Boot a single module.
+     */
+    protected function bootSingleModule(string $module): void
+    {
+        $studly = Str::studly($module);
+        $providerClass = "Modules\\{$studly}\\Providers\\{$studly}ServiceProvider";
+
+        if (!class_exists($providerClass)) {
+            return;
+        }
+
+        try {
+            $provider = $this->app->resolveProvider($providerClass);
+
+            if (method_exists($provider, 'boot') && is_callable([$provider, 'boot'])) {
+                $provider->boot();
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to boot provider {$providerClass}: " . $e->getMessage());
+            report($e);
         }
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Http\Middleware;
+namespace RCV\Core\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;

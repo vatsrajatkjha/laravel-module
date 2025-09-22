@@ -1,11 +1,11 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
-class ModuleControllerMakeCommand extends Command
+class ModuleMakeControllerCommand extends Command
 {
     /**
      * The name and signature of the console command.
@@ -36,6 +36,7 @@ class ModuleControllerMakeCommand extends Command
         $isApi = $this->option('api');
 
         // Check if module exists
+        $modulePath = base_path("Modules/{$module}");
         $modulePath = base_path("Modules/{$module}");
         if (!File::exists($modulePath)) {
             $this->error("Module [{$module}] does not exist.");
@@ -83,6 +84,7 @@ class ModuleControllerMakeCommand extends Command
         $stub = str_replace('{{ module_name }}', $module, $stub);
 
         $controllerPath = base_path("Modules/{$module}/src/Http/Controllers");
+        $controllerPath = base_path("Modules/{$module}/src/Http/Controllers");
         if (!File::exists($controllerPath)) {
             File::makeDirectory($controllerPath, 0755, true);
         }
@@ -118,28 +120,37 @@ class ModuleControllerMakeCommand extends Command
      */
     protected function createController($stub, $name, $module, $isResource, $isApi, $subPath = '')
     {
-        $stubPath = __DIR__ . '/../stubs/' . $stub;
-        $stub = File::get($stubPath);
+        $stub = File::get(__DIR__ . '/../stubs/' . $stub);
 
-        // Build namespace including subdirectory
-        $namespaceSuffix = $subPath !== '' ? '\\' . str_replace('/', '\\', $subPath) : '';
-        $namespace = "Modules\\{$module}\\Http\\Controllers{$namespaceSuffix}";
-
-        // Replace placeholders
-        $stub = str_replace('{{ namespace }}', $namespace, $stub);
-        $stub = str_replace('{{ module_name }}', $module, $stub);
-        $stub = str_replace('{{ class_name }}', $name, $stub);
+        // Extract class name
+        $className = Str::studly(class_basename($name));
+        $stub = str_replace('{{ class_name }}', $className, $stub);
 
         if ($isResource) {
-            $resourceName = Str::studly(Str::singular($name));
+            $resourceName = Str::studly(Str::singular($className));
             $stub = str_replace('{{ resource_name }}', $resourceName, $stub);
             $stub = str_replace('{{ resource_name_lower }}', Str::camel($resourceName), $stub);
         }
 
-        // Save file
-        $targetDir = base_path("Modules/{$module}/src/Http/Controllers" . ($subPath !== '' ? '/' . $subPath : ''));
-        File::ensureDirectoryExists($targetDir, 0755, true);
-        File::put($targetDir . "/{$name}.php", $stub);
-    }
+        // Build namespace
+        $subNamespace = trim(str_replace('/', '\\', Str::beforeLast($name, '/')), '\\');
+        $namespace = "Modules\\{$module}\\Http\\Controllers";
+        if ($subNamespace !== '') {
+            $namespace .= '\\' . Str::studly($subNamespace);
+        }
 
-} 
+        $stub = str_replace('{{ module_name }}', $module, $stub);
+        $stub = str_replace('{{ namespace }}', $namespace, $stub);
+
+        // Destination path
+        $controllerPath = base_path("Modules/{$module}/src/Http/Controllers/{$name}.php");
+
+        // Ensure directory exists
+        $dir = dirname($controllerPath);
+        if (!File::exists($dir)) {
+            File::makeDirectory($dir, 0755, true);
+        }
+
+        File::put($controllerPath, $stub);
+    }
+}

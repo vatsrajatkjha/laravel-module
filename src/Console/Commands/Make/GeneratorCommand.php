@@ -1,5 +1,5 @@
 <?php
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;

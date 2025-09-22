@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Services;
+namespace RCV\Core\Services;
 
-use Rcv\Core\Contracts\ServiceInterface;
-use Rcv\Core\Contracts\RepositoryInterface;
+use RCV\Core\Contracts\ServiceInterface;
+use RCV\Core\Contracts\RepositoryInterface;
 
 abstract class BaseService implements ServiceInterface
 {

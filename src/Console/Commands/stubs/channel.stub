@@ -1,10 +1,10 @@
 <?php
 
-namespace Modules\{{module}}\Channels;
+namespace {{ namespace }};
 
 use Illuminate\Notifications\Notification;
 
-class {{class}}
+class {{ class }}
 {
     /**
      * Send the given notification.

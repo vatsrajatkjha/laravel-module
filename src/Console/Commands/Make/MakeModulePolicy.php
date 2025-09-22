@@ -1,6 +1,6 @@
 <?php
 
-namespace Rcv\Core\Console\Commands\Make;
+namespace RCV\Core\Console\Commands\Make;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
@@ -8,36 +8,46 @@ use Illuminate\Support\Str;
 
 class MakeModulePolicy extends Command
 {
-    protected $signature = 'module:make-policy {module} {name}';
+    protected $signature = 'module:make-policy 
+                            {name : The policy class name (can include subdirectories)} 
+                            {module : The module name}';
+
     protected $description = 'Create a new policy class for the specified module';
 
     public function handle()
     {
-        $module = $this->argument('module'); // e.g., Blog
-        $name = $this->argument('name');     // e.g., PostPolicy
+        $module = Str::studly($this->argument('module')); // e.g., Blog
+        $nameInput = $this->argument('name');             // e.g., Admin/PostPolicy
 
-        $className = Str::studly(class_basename($name));
-        $directory = base_path("Modules/{$module}/src/Policies");
-        $filePath = "{$directory}/{$className}.php";
+        // Split class name for subdirectory handling
+        $parts = preg_split('/[\/\\\\]+/', $nameInput);
+        $className = Str::studly(array_pop($parts)); // Last segment is class
+        $subPath = implode('/', array_map([Str::class, 'studly'], $parts)); // path under Policies
+        $subNamespace = implode('\\', array_map([Str::class, 'studly'], $parts)); // namespace under Policies
 
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
-        }
+        // Path & namespace
+        $basePath = base_path("Modules/{$module}/src/Policies" . ($subPath ? "/{$subPath}" : ''));
+        $namespace = "Modules\\{$module}\\Policies" . ($subNamespace ? "\\{$subNamespace}" : '');
+        $filePath = "{$basePath}/{$className}.php";
 
+        // Check existing file
         if (File::exists($filePath)) {
-            $this->error("Policy already exists: {$filePath}");
-            return 1;
+            $this->error("Policy class {$className} already exists in module {$module}.");
+            return Command::FAILURE;
         }
 
-         $stubPath = __DIR__ . '/../stubs/policy.stub';
+        File::ensureDirectoryExists($basePath);
+
+        // Load stub
+        $stubPath = __DIR__ . '/../stubs/policy.stub';
         if (!File::exists($stubPath)) {
             $this->error("Stub file not found at: {$stubPath}");
-            return;
+            return Command::FAILURE;
         }
 
-        $stub = file_get_contents($stubPath);
-        $namespace = "Modules\\{$module}\\Policies";
+        $stub = File::get($stubPath);
 
+        // Replace placeholders
         $content = str_replace(
             ['{{namespace}}', '{{class}}'],
             [$namespace, $className],
@@ -45,7 +55,10 @@ class MakeModulePolicy extends Command
         );
 
         File::put($filePath, $content);
-        $this->info("Policy class created: {$filePath}");
-        return 0;
+
+        $this->info("Policy class {$className} created successfully in module {$module}.");
+        $this->info("Path: {$filePath}");
+
+        return Command::SUCCESS;
     }
 }

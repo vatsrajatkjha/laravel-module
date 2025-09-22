@@ -1,9 +1,9 @@
 <?php
 
-namespace Rcv\Core\Console\Commands;
+namespace RCV\Core\Console\Commands;
 
 use Illuminate\Console\Command;
-use Rcv\Core\Services\ModuleBackupManager;
+use RCV\Core\Services\ModuleBackupManager;
 
 class ModuleBackupCommand extends Command
 {
