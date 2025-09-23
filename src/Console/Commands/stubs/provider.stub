@@ -26,7 +26,6 @@ class {{ module_name }}ServiceProvider extends ServiceProvider
         }
     }
 
-
     /**
      * Bootstrap services.
      */

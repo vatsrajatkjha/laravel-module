@@ -13,11 +13,11 @@ class ModuleMakeModelCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'module:make-model 
-                            {name : The name of the model} 
-                            {module : The name of the module} 
-                            {--migration : Create a new migration file for the model} 
-                            {--factory : Create a new factory for the model} 
+    protected $signature = 'module:make-model
+                            {name : The name of the model}
+                            {module : The name of the module}
+                            {--migration : Create a new migration file for the model}
+                            {--factory : Create a new factory for the model}
                             {--seed : Create a new seeder for the model}';
 
     /**
