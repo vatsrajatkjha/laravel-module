@@ -165,4 +165,9 @@ class ModuleMakeCommand extends Command
 
         File::put($configPath, "<?php\n\nreturn " . var_export($config, true) . ";\n");
     }
+
+    public function getModuleNa(): string
+    {
+        return $this->argument('module');
+    }
 }
