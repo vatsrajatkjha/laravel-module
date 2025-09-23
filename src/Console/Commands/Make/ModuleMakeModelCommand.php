@@ -13,11 +13,11 @@ class ModuleMakeModelCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'module:make-model 
-                            {name : The name of the model} 
-                            {module : The name of the module} 
-                            {--migration : Create a new migration file for the model} 
-                            {--factory : Create a new factory for the model} 
+    protected $signature = 'module:make-model
+                            {name : The name of the model}
+                            {module : The name of the module}
+                            {--migration : Create a new migration file for the model}
+                            {--factory : Create a new factory for the model}
                             {--seed : Create a new seeder for the model}';
 
     /**
@@ -39,7 +39,6 @@ class ModuleMakeModelCommand extends Command
 
         // Ensure module exists
         if (!File::exists(base_path("Modules/{$module}"))) {
-        if (!File::exists(base_path("Modules/{$module}"))) {
             $this->error("Module [{$module}] does not exist.");
             return 1;
         }
@@ -59,25 +58,21 @@ class ModuleMakeModelCommand extends Command
 
         // Generate model file
         $modelFile = "{$modelPath}/{$className}.php";
-        $modelFile = "{$modelPath}/{$className}.php";
         $stub = File::get(__DIR__ . '/../stubs/model.stub');
 
         // Replace placeholders
         $content = str_replace(
             ['{{ module_name }}', '{{ class_name }}'],
             [$module, $className],
-            [$module, $className],
             $stub
         );
 
         File::put($modelFile, $content);
         $this->info("Model [{$className}] created successfully.");
-        $this->info("Model [{$className}] created successfully.");
         $this->info("Path: {$modelFile}");
 
         // Create migration if requested
         if ($this->option('migration')) {
-            $table = Str::snake(Str::pluralStudly($className));
             $table = Str::snake(Str::pluralStudly($className));
             $this->call('module:make-migration', [
                 'name' => "create_{$table}_table",
@@ -89,7 +84,6 @@ class ModuleMakeModelCommand extends Command
         if ($this->option('factory')) {
             $this->call('module:make-factory', [
                 'name' => "{$className}Factory",
-                'name' => "{$className}Factory",
                 'module' => $module
             ]);
         }
@@ -97,7 +91,6 @@ class ModuleMakeModelCommand extends Command
         // Create seeder if requested
         if ($this->option('seed')) {
             $this->call('module:make-seeder', [
-                'name' => "{$className}Seeder",
                 'name' => "{$className}Seeder",
                 'module' => $module
             ]);
