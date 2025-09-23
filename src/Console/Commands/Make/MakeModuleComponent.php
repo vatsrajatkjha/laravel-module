@@ -8,18 +8,18 @@ use Illuminate\Support\Str;
 
 class MakeModuleComponent extends Command
 {
-    protected $signature = 'module:make-component 
-        {module : The module name} 
-        {names : One or multiple component class names (comma-separated, e.g. Organization/Sidebar,Dashboard/Header)} 
-        {--stub-class= : Path to custom component class stub} 
+    protected $signature = 'module:make-component
+        {names : One or multiple component class names (comma-separated, e.g. Organization/Sidebar,Dashboard/Header)}
+        {module : The module name}
+        {--stub-class= : Path to custom component class stub}
         {--stub-view= : Path to custom blade view stub}';
 
     protected $description = 'Create one or more component classes and blade views for a module and register them in the ServiceProvider';
 
     public function handle(): int
     {
+        $names  = explode(',', $this->argument('names'));
         $module = $this->argument('module');
-        $names  = explode(',', $this->argument('names')); // multiple components supported
 
         foreach ($names as $name) {
             $name = trim($name);
@@ -28,6 +28,7 @@ class MakeModuleComponent extends Command
 
         return static::SUCCESS;
     }
+
 
     protected function generateComponent(string $module, string $name): void
     {
@@ -52,7 +53,7 @@ class MakeModuleComponent extends Command
         }
 
         // Register in ServiceProvider
-        $this->registerInServiceProvider($module, $namespace . '\\' . $className, $viewName);
+        $this->registerInServiceProvider($module, '\\' . $namespace . '\\' . $className, $viewName);
     }
 
     protected function preparePaths(string $module, string $name): array
